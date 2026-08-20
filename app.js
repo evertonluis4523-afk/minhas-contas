@@ -16,7 +16,7 @@ const els={
  totalRemaining:$('#totalRemaining'),totalOriginal:$('#totalOriginal'),totalPaid:$('#totalPaid'),paidPercent:$('#paidPercent'),
  accountCount:$('#accountCount'),accountsList:$('#accountsList'),paymentsList:$('#paymentsList'),
  paymentDialog:$('#paymentDialog'),paymentForm:$('#paymentForm'),paymentAccount:$('#paymentAccount'),paymentAmount:$('#paymentAmount'),paymentDate:$('#paymentDate'),paymentNote:$('#paymentNote'),
- accountDialog:$('#accountDialog'),accountForm:$('#accountForm'),accountName:$('#accountName'),accountAmount:$('#accountAmount'),
+ accountDialog:$('#accountDialog'),accountForm:$('#accountForm'),accountCreditor:$('#accountCreditor'),accountName:$('#accountName'),accountDetail:$('#accountDetail'),accountAmount:$('#accountAmount'),
  costDialog:$('#costDialog'),costForm:$('#costForm'),costAmount:$('#costAmount'),costCategory:$('#costCategory'),costPlace:$('#costPlace'),costDate:$('#costDate'),costNote:$('#costNote'),
  monthFilter:$('#monthFilter'),monthSpent:$('#monthSpent'),monthCount:$('#monthCount'),monthName:$('#monthName'),categorySummary:$('#categorySummary'),costsList:$('#costsList'),costCount:$('#costCount'),
  debtsView:$('#debtsView'),costsView:$('#costsView'),backupDialog:$('#backupDialog'),fab:$('#fab')
@@ -41,6 +41,19 @@ function esc(v=''){return String(v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt
 function dateBR(v){if(!v)return'';const[y,m,d]=v.split('-');return`${d}/${m}/${y}`;}
 function paid(a){return(a.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0);}
 function remaining(a){return Math.max(0,Number(a.original)-paid(a));}
+function accountDisplay(a){return a.detail?`${a.name} — ${a.detail}`:a.name;}
+function creditorNames(){return [...new Set(state.accounts.map(a=>a.name))].sort((a,b)=>a.localeCompare(b,'pt-BR'));}
+function fillCreditorSelect(){
+ if(!els.accountCreditor)return;
+ els.accountCreditor.innerHTML='<option value="">Novo banco / credor</option>'+creditorNames().map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+}
+function openAccount(creditor=''){
+ els.accountForm.reset(); fillCreditorSelect(); els.accountCreditor.value=creditor;
+ els.accountName.value=creditor; els.accountName.disabled=!!creditor;
+ $('#accountNameLabel').classList.toggle('hidden',!!creditor);
+ els.accountDialog.showModal();
+}
+
 function totals(){const original=state.accounts.reduce((s,a)=>s+Number(a.original),0),totalPaid=state.accounts.reduce((s,a)=>s+paid(a),0);return{original,totalPaid,remaining:Math.max(0,original-totalPaid)};}
 function initials(name){return name.split(/\s+/).slice(0,2).map(v=>v[0]).join('').toUpperCase();}
 function accountIcon(name){
@@ -101,19 +114,19 @@ function render(){
  els.totalPaid.textContent=fmt.format(t.totalPaid);
  els.paidPercent.textContent=t.original?`${Math.min(100,t.totalPaid/t.original*100).toFixed(1)}%`:'0%';
  els.accountCount.textContent=`${state.accounts.length} ${state.accounts.length===1?'conta':'contas'}`;
- els.paymentAccount.innerHTML=state.accounts.map(a=>`<option value="${a.id}">${esc(a.name)} — ${fmt.format(remaining(a))}</option>`).join('');
+ els.paymentAccount.innerHTML=state.accounts.map(a=>`<option value="${a.id}">${esc(accountDisplay(a))} — ${fmt.format(remaining(a))}</option>`).join('');
  els.accountsList.innerHTML=state.accounts.length?state.accounts.map(a=>{
    const p=paid(a),r=remaining(a),pct=a.original?Math.min(100,p/a.original*100):0;
    return`<article class="account-card">
-    <div class="account-top"><div class="account-name">${accountIcon(a.name)}<div><h3>${esc(a.name)}</h3><small>Inicial: ${fmt.format(a.original)}</small></div></div>
+    <div class="account-top"><div class="account-name">${accountIcon(a.name)}<div><h3>${esc(a.name)}</h3>${a.detail?`<small class="account-detail">${esc(a.detail)}</small>`:''}<small>Inicial: ${fmt.format(a.original)}</small></div></div>
     <div class="account-balance"><small>Restante</small><strong>${fmt.format(r)}</strong></div></div>
     <div class="progress"><span style="width:${pct}%"></span></div>
     <div class="account-actions"><span class="paid-info">Pago: ${fmt.format(p)} • ${pct.toFixed(1)}%</span>
-    <div class="mini-actions"><button class="mini-btn" data-pay="${a.id}">+ Pagamento</button><button class="mini-btn danger" data-delete-account="${a.id}">Excluir</button></div></div>
+    <div class="mini-actions"><button class="mini-btn" data-pay="${a.id}">+ Pagamento</button><button class="mini-btn" data-add-under="${esc(a.name)}">+ Conta</button><button class="mini-btn danger" data-delete-account="${a.id}">Excluir</button></div></div>
    </article>`;
  }).join(''):'<div class="empty">Nenhuma conta cadastrada.</div>';
 
- const allPayments=state.accounts.flatMap(a=>(a.payments||[]).map(p=>({...p,accountId:a.id,accountName:a.name}))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||0)-(a.createdAt||0));
+ const allPayments=state.accounts.flatMap(a=>(a.payments||[]).map(p=>({...p,accountId:a.id,accountName:accountDisplay(a)}))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||0)-(a.createdAt||0));
  els.paymentsList.innerHTML=allPayments.length?allPayments.slice(0,30).map(p=>`<div class="payment-row"><div class="payment-meta"><strong>${esc(p.accountName)}</strong><small>${dateBR(p.date)}${p.note?' • '+esc(p.note):''}</small></div><div class="payment-value"><strong>-${fmt.format(p.amount)}</strong><button data-delete-payment="${p.accountId}|${p.id}">Excluir</button></div></div>`).join(''):'<div class="empty">Nenhum pagamento lançado.</div>';
  renderCosts();
 }
@@ -143,7 +156,7 @@ function openCost(){els.costForm.reset();els.costDate.value=today();els.costDial
 
 els.fab.addEventListener('click',()=>currentView==='costs'?openCost():openPayment());
 $('#addCostBtn').addEventListener('click',openCost);
-$('#addAccountBtn').addEventListener('click',()=>{els.accountForm.reset();els.accountDialog.showModal();});
+$('#addAccountBtn').addEventListener('click',()=>openAccount());
 $('#backupBtn').addEventListener('click',()=>els.backupDialog.showModal());
 els.monthFilter.addEventListener('change',renderCosts);
 $$('.nav-btn').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
@@ -151,6 +164,7 @@ $$('.nav-btn').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)
 document.addEventListener('click',e=>{
  const close=e.target.closest('[data-close]');if(close)document.getElementById(close.dataset.close)?.close();
  const payBtn=e.target.closest('[data-pay]');if(payBtn)openPayment(payBtn.dataset.pay);
+ const addUnder=e.target.closest('[data-add-under]');if(addUnder)openAccount(addUnder.dataset.addUnder);
  const delAcc=e.target.closest('[data-delete-account]');if(delAcc){const a=state.accounts.find(x=>x.id===delAcc.dataset.deleteAccount);if(a&&confirm(`Excluir ${a.name} e todo o histórico dela?`)){state.accounts=state.accounts.filter(x=>x.id!==a.id);save();}}
  const delPay=e.target.closest('[data-delete-payment]');if(delPay){const[aid,pid]=delPay.dataset.deletePayment.split('|');const a=state.accounts.find(x=>x.id===aid);if(a&&confirm('Excluir este pagamento?')){a.payments=a.payments.filter(p=>p.id!==pid);save();}}
  const delCost=e.target.closest('[data-delete-cost]');if(delCost&&confirm('Excluir este gasto?')){state.costs=state.costs.filter(c=>c.id!==delCost.dataset.deleteCost);save();}
@@ -160,7 +174,8 @@ els.paymentForm.addEventListener('submit',e=>{
  const r=remaining(a);if(amount>r+.001&&!confirm(`O pagamento é maior que o saldo restante (${fmt.format(r)}). Registrar mesmo assim?`))return;
  a.payments.push({id:crypto.randomUUID?.()||String(Date.now()),amount,date:els.paymentDate.value,note:els.paymentNote.value.trim(),createdAt:Date.now()});save();els.paymentDialog.close();
 });
-els.accountForm.addEventListener('submit',e=>{e.preventDefault();const name=els.accountName.value.trim(),original=Number(els.accountAmount.value);if(!name||original<=0)return;state.accounts.push({id:crypto.randomUUID?.()||String(Date.now()),name,original,payments:[]});save();els.accountDialog.close();});
+els.accountCreditor.addEventListener('change',()=>{const creditor=els.accountCreditor.value;els.accountName.disabled=!!creditor;$('#accountNameLabel').classList.toggle('hidden',!!creditor);if(creditor)els.accountName.value=creditor;else els.accountName.value='';});
+els.accountForm.addEventListener('submit',e=>{e.preventDefault();const creditor=els.accountCreditor.value;const name=(creditor||els.accountName.value).trim(),detail=els.accountDetail.value.trim(),original=Number(els.accountAmount.value);if(!name||original<=0)return;state.accounts.push({id:crypto.randomUUID?.()||String(Date.now()),name,detail,original,payments:[]});save();els.accountDialog.close();});
 els.costForm.addEventListener('submit',e=>{e.preventDefault();const amount=Number(els.costAmount.value),place=els.costPlace.value.trim();if(amount<=0||!place)return;state.costs.push({id:crypto.randomUUID?.()||String(Date.now()),amount,category:els.costCategory.value,place,date:els.costDate.value,note:els.costNote.value.trim(),createdAt:Date.now()});els.monthFilter.value=els.costDate.value.slice(0,7);save();els.costDialog.close();});
 $('#clearPaymentsBtn').addEventListener('click',()=>{if(confirm('Limpar todos os pagamentos lançados?')){state.accounts.forEach(a=>a.payments=[]);save();}});
 $('#exportBtn').addEventListener('click',()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`minhas-contas-backup-${today()}.json`;a.click();URL.revokeObjectURL(url);});
