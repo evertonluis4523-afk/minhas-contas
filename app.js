@@ -113,16 +113,57 @@ function render(){
  els.totalOriginal.textContent=`Original: ${fmt.format(t.original)}`;
  els.totalPaid.textContent=fmt.format(t.totalPaid);
  els.paidPercent.textContent=t.original?`${Math.min(100,t.totalPaid/t.original*100).toFixed(1)}%`:'0%';
- els.accountCount.textContent=`${state.accounts.length} ${state.accounts.length===1?'conta':'contas'}`;
+
+ const groups=[...new Set(state.accounts.map(a=>a.name))].map(name=>({
+   name,
+   accounts:state.accounts.filter(a=>a.name===name)
+ }));
+ els.accountCount.textContent=`${groups.length} ${groups.length===1?'credor':'credores'}`;
+
  els.paymentAccount.innerHTML=state.accounts.map(a=>`<option value="${a.id}">${esc(accountDisplay(a))} — ${fmt.format(remaining(a))}</option>`).join('');
- els.accountsList.innerHTML=state.accounts.length?state.accounts.map(a=>{
-   const p=paid(a),r=remaining(a),pct=a.original?Math.min(100,p/a.original*100):0;
-   return`<article class="account-card">
-    <div class="account-top"><div class="account-name">${accountIcon(a.name)}<div><h3>${esc(a.name)}</h3>${a.detail?`<small class="account-detail">${esc(a.detail)}</small>`:''}<small>Inicial: ${fmt.format(a.original)}</small></div></div>
-    <div class="account-balance"><small>Restante</small><strong>${fmt.format(r)}</strong></div></div>
-    <div class="progress"><span style="width:${pct}%"></span></div>
-    <div class="account-actions"><span class="paid-info">Pago: ${fmt.format(p)} • ${pct.toFixed(1)}%</span>
-    <div class="mini-actions"><button class="mini-btn" data-pay="${a.id}">+ Pagamento</button><button class="mini-btn" data-add-under="${esc(a.name)}">+ Conta</button><button class="mini-btn danger" data-delete-account="${a.id}">Excluir</button></div></div>
+
+ els.accountsList.innerHTML=groups.length?groups.map(g=>{
+   const original=g.accounts.reduce((s,a)=>s+Number(a.original),0);
+   const totalPaid=g.accounts.reduce((s,a)=>s+paid(a),0);
+   const totalRemaining=Math.max(0,original-totalPaid);
+   const pct=original?Math.min(100,totalPaid/original*100):0;
+
+   const accountRows=g.accounts.map((a,i)=>{
+     const p=paid(a),r=remaining(a),apct=a.original?Math.min(100,p/a.original*100):0;
+     const label=a.detail || (g.accounts.length===1 ? 'Conta principal' : `Conta ${i+1}`);
+     return `<div class="sub-account-row">
+       <div class="sub-account-main">
+         <div>
+           <strong>${esc(label)}</strong>
+           <small>Inicial: ${fmt.format(a.original)} • Pago: ${fmt.format(p)}</small>
+         </div>
+         <div class="sub-account-balance">
+           <small>Restante</small>
+           <strong>${fmt.format(r)}</strong>
+         </div>
+       </div>
+       <div class="progress mini-progress"><span style="width:${apct}%"></span></div>
+       <div class="sub-account-actions">
+         <button class="mini-btn" data-pay="${a.id}">+ Pagamento</button>
+         <button class="mini-btn danger" data-delete-account="${a.id}">Excluir conta</button>
+       </div>
+     </div>`;
+   }).join('');
+
+   return `<article class="account-card creditor-card">
+     <div class="account-top">
+       <div class="account-name">${accountIcon(g.name)}<div><h3>${esc(g.name)}</h3><small>${g.accounts.length} ${g.accounts.length===1?'conta':'contas'}</small></div></div>
+       <div class="account-balance"><small>Total restante</small><strong>${fmt.format(totalRemaining)}</strong></div>
+     </div>
+     <div class="progress"><span style="width:${pct}%"></span></div>
+     <div class="creditor-summary">
+       <span>Original: ${fmt.format(original)}</span>
+       <span>Pago: ${fmt.format(totalPaid)} • ${pct.toFixed(1)}%</span>
+     </div>
+     <div class="sub-accounts">${accountRows}</div>
+     <div class="creditor-actions">
+       <button class="secondary-btn small" data-add-under="${esc(g.name)}">+ Adicionar conta</button>
+     </div>
    </article>`;
  }).join(''):'<div class="empty">Nenhuma conta cadastrada.</div>';
 

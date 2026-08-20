@@ -23,3 +23,22 @@
 .category-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px}.category-card{background:#fff;border:1px solid var(--line);border-radius:17px;padding:14px;display:flex;gap:11px;align-items:center;box-shadow:0 5px 15px rgba(31,38,69,.04)}.category-icon,.small-icon{display:grid;place-items:center;background:#f3efff;border-radius:13px;width:40px;height:40px;font-size:20px;flex:0 0 auto}.category-card div{min-width:0}.category-card small,.category-card em{display:block;color:var(--muted);font-style:normal;font-size:11px}.category-card strong{display:block;font-size:16px;margin:3px 0}.wide{grid-column:1/-1}.cost-left{display:flex;align-items:center;gap:10px;min-width:0}.cost-value strong{color:var(--ink)}.month-name{font-size:16px!important;letter-spacing:0!important;text-transform:capitalize}
 #costSummary{margin-bottom:-58px}
 @media(max-width:520px){.cost-toolbar{align-items:stretch}.cost-toolbar .primary-btn{white-space:nowrap}.category-grid{grid-template-columns:1fr 1fr}.category-card{padding:12px}.category-card strong{font-size:14px}}
+
+.creditor-card{overflow:hidden}
+.creditor-summary{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:12px;margin:9px 0 12px}
+.sub-accounts{display:grid;gap:10px}
+.sub-account-row{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fafbff}
+.sub-account-main{display:flex;justify-content:space-between;gap:12px;align-items:start}
+.sub-account-main>div:first-child{min-width:0}
+.sub-account-main strong{display:block;font-size:14px;color:var(--ink)}
+.sub-account-main small{display:block;color:var(--muted);font-size:11px;margin-top:3px;line-height:1.35}
+.sub-account-balance{text-align:right;flex:0 0 auto}
+.sub-account-balance strong{font-size:15px}
+.mini-progress{margin:10px 0 8px;height:5px}
+.sub-account-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.creditor-actions{display:flex;justify-content:flex-end;margin-top:12px}
+.secondary-btn.small{padding:10px 13px;font-size:12px}
+@media(max-width:520px){
+ .creditor-summary{flex-direction:column;gap:3px}
+ .sub-account-main{align-items:center}
+}
