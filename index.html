@@ -164,23 +164,60 @@
     </form>
   </dialog>
 
-<dialog id="pdfImportDialog" class="modal"><div class="modal-card pdf-import-card">
-<div class="modal-head"><div><span class="eyebrow dark">IMPORTAÇÃO AUTOMÁTICA</span><h3>Importar PDF do banco</h3></div><button type="button" class="close-btn" data-close="pdfImportDialog">×</button></div>
-<label class="pdf-drop"><span class="pdf-drop-icon">PDF</span><strong>Selecionar PDF</strong><small>Fatura, contrato ou demonstrativo. O aplicativo tenta preencher tudo automaticamente.</small><input id="pdfFileInput" type="file" accept="application/pdf,.pdf" hidden></label>
-<div id="pdfReading" class="pdf-status hidden">Lendo documento…</div>
-<div id="pdfResult" class="hidden">
-<div class="import-detected"><span>Banco detectado</span><strong id="pdfDetectedBank">—</strong></div>
-<div class="field-grid import-grid"><label>Banco / credor<input id="pdfBank" type="text"></label><label>Tipo<select id="pdfType"><option value="credit_card">Cartão de crédito</option><option value="loan">Empréstimo</option><option value="consigned">Consignado</option><option value="financing">Financiamento</option><option value="other">Outra conta</option></select></label></div>
-<label>Conta / contrato<input id="pdfDetail" type="text" placeholder="Ex.: Mastercard, Empréstimo 01"></label>
-<label>Valor encontrado<select id="pdfAmountCandidates"></select></label>
-<label>Valor que entrará na dívida<input id="pdfAmount" type="number" min="0.01" step="0.01" inputmode="decimal"></label>
-<div class="field-grid"><label>Limite<input id="pdfCardLimit" type="number" min="0" step="0.01"></label><label>Vencimento (dia)<input id="pdfDueDay" type="number" min="1" max="31"></label><label>Fechamento (dia)<input id="pdfCloseDay" type="number" min="1" max="31"></label></div>
-<div class="pdf-confidence"><span id="pdfConfidenceText">Confira os dados antes de salvar.</span></div>
-<details class="pdf-debug"><summary>Ver texto identificado</summary><pre id="pdfExtractPreview"></pre></details>
-<div class="modal-actions"><button type="button" class="ghost-btn" data-close="pdfImportDialog">Cancelar</button><button id="savePdfImportBtn" type="button" class="primary-btn">Adicionar ao aplicativo</button></div>
-</div></div></dialog>
 
-  <dialog id="backupDialog" class="modal">
+  <dialog id="pdfImportDialog" class="modal">
+    <div class="modal-card pdf-import-card">
+      <div class="modal-head">
+        <div>
+          <span class="eyebrow dark">IMPORTAÇÃO INTELIGENTE</span>
+          <h3>Importar dívidas por PDF</h3>
+        </div>
+        <button type="button" class="close-btn" data-close="pdfImportDialog">×</button>
+      </div>
+
+      <label class="pdf-drop">
+        <span class="pdf-drop-icon">PDF</span>
+        <strong>Selecionar documento</strong>
+        <small>Compatível com SCR/Registrato do Banco Central e DDC do Nubank. O sistema identifica as dívidas e prepara a atualização automaticamente.</small>
+        <input id="pdfFileInput" type="file" accept="application/pdf,.pdf" hidden />
+      </label>
+
+      <div id="pdfReading" class="pdf-status hidden">Lendo e organizando o documento…</div>
+
+      <div id="pdfResult" class="hidden">
+        <div class="import-detected">
+          <div>
+            <span>Documento identificado</span>
+            <strong id="pdfDocumentType">—</strong>
+          </div>
+          <div class="import-total-box">
+            <span>Total identificado</span>
+            <strong id="pdfImportTotal">R$ 0,00</strong>
+          </div>
+        </div>
+
+        <div id="pdfImportNotice" class="pdf-confidence"></div>
+
+        <div class="import-list-head">
+          <strong>Dívidas encontradas</strong>
+          <span id="pdfItemCount">0 itens</span>
+        </div>
+        <div id="pdfItemsList" class="pdf-items-list"></div>
+
+        <details class="pdf-debug">
+          <summary>Ver texto identificado no PDF</summary>
+          <pre id="pdfExtractPreview"></pre>
+        </details>
+
+        <div class="modal-actions">
+          <button type="button" class="ghost-btn" data-close="pdfImportDialog">Cancelar</button>
+          <button id="savePdfImportBtn" type="button" class="primary-btn">Importar / atualizar</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+<dialog id="backupDialog" class="modal">
     <div class="modal-card">
       <div class="modal-head"><div><span class="eyebrow dark">DADOS</span><h3>Backup</h3></div><button type="button" class="close-btn" data-close="backupDialog">×</button></div>
       <p class="backup-copy">Exporte contas, pagamentos e gastos ou importe um backup anterior.</p>

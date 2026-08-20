@@ -41,7 +41,7 @@ const els={
  accountDialog:$('#accountDialog'),accountForm:$('#accountForm'),accountCreditor:$('#accountCreditor'),accountName:$('#accountName'),accountDetail:$('#accountDetail'),accountType:$('#accountType'),accountAmount:$('#accountAmount'),creditCardFields:$('#creditCardFields'),cardLimit:$('#cardLimit'),cardDueDay:$('#cardDueDay'),cardCloseDay:$('#cardCloseDay'),
  costDialog:$('#costDialog'),costForm:$('#costForm'),costAmount:$('#costAmount'),costCategory:$('#costCategory'),costPlace:$('#costPlace'),costDate:$('#costDate'),costNote:$('#costNote'),
  monthFilter:$('#monthFilter'),monthSpent:$('#monthSpent'),monthCount:$('#monthCount'),monthName:$('#monthName'),categorySummary:$('#categorySummary'),costsList:$('#costsList'),costCount:$('#costCount'),
- debtsView:$('#debtsView'),costsView:$('#costsView'),backupDialog:$('#backupDialog'),pdfImportDialog:$('#pdfImportDialog'),pdfFileInput:$('#pdfFileInput'),pdfReading:$('#pdfReading'),pdfResult:$('#pdfResult'),pdfDetectedBank:$('#pdfDetectedBank'),pdfBank:$('#pdfBank'),pdfType:$('#pdfType'),pdfDetail:$('#pdfDetail'),pdfAmountCandidates:$('#pdfAmountCandidates'),pdfAmount:$('#pdfAmount'),pdfCardLimit:$('#pdfCardLimit'),pdfDueDay:$('#pdfDueDay'),pdfCloseDay:$('#pdfCloseDay'),pdfConfidenceText:$('#pdfConfidenceText'),pdfExtractPreview:$('#pdfExtractPreview'),fab:$('#fab')
+ debtsView:$('#debtsView'),costsView:$('#costsView'),backupDialog:$('#backupDialog'),pdfImportDialog:$('#pdfImportDialog'),pdfFileInput:$('#pdfFileInput'),pdfReading:$('#pdfReading'),pdfResult:$('#pdfResult'),pdfDocumentType:$('#pdfDocumentType'),pdfImportTotal:$('#pdfImportTotal'),pdfImportNotice:$('#pdfImportNotice'),pdfItemCount:$('#pdfItemCount'),pdfItemsList:$('#pdfItemsList'),pdfExtractPreview:$('#pdfExtractPreview'),fab:$('#fab')
 };
 
 let state=loadState();
@@ -180,36 +180,330 @@ els.resetPasswordBtn.addEventListener('click',async()=>{
 $('#logoutBtn').addEventListener('click',()=>signOut(auth));
 
 
-function brMoneyToNumber(v){let s=String(v||'').replace(/\s/g,'').replace(/R\$/gi,'').replace(/[^\d.,-]/g,'');if(!s)return 0;if(s.includes(',')&&s.includes('.'))s=s.replace(/\./g,'').replace(',','.');else if(s.includes(','))s=s.replace(',','.');const n=Number(s);return Number.isFinite(n)?Math.abs(n):0;}
-function detectBank(text){const t=text.toLowerCase(),banks=[['Mercado Pago',/mercado\s*pago|mercadopago/],['Nubank',/nubank|nu pagamentos/],['Sicredi',/sicredi/],['Cresol',/cresol/],['Meu Tudo Consignado',/meu\s*tudo|meutudo/],['Infinity Pay',/infinity\s*pay|cloudwalk/],['Itaú',/ita[uú]/],['Bradesco',/bradesco/],['Santander',/santander/],['Banco do Brasil',/banco\s+do\s+brasil/],['Caixa',/caixa\s+econ[oô]mica/],['Inter',/banco\s+inter/],['C6 Bank',/c6\s*bank/],['PicPay',/picpay/]];return(banks.find(([,r])=>r.test(t))||['Banco não identificado'])[0];}
-function detectDebtType(text){const t=text.toLowerCase();if(/fatura|cart[aã]o|limite|fechamento/.test(t))return'credit_card';if(/consignad/.test(t))return'consigned';if(/financiamento/.test(t))return'financing';if(/empr[eé]stimo|cr[eé]dito pessoal|saldo devedor|parcelas restantes/.test(t))return'loan';return'other';}
-function extractDay(text,patterns){for(const rx of patterns){const m=text.match(rx);if(!m)continue;const raw=m[1]||'';const d=raw.match(/\b([0-3]?\d)[\/.-]/);const n=d?Number(d[1]):Number(raw.replace(/\D/g,''));if(n>=1&&n<=31)return n;}return null;}
-function extractMoneyCandidates(text){
- const lines=text.split(/\n+/).map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean),out=[];
- const rules=[['Valor para quitação',/valor\s+(?:para\s+)?quita[cç][aã]o|quita[cç][aã]o\s+hoje/i,100],['Saldo devedor',/saldo\s+devedor|saldo\s+da\s+d[ií]vida/i,96],['Total da fatura',/total\s+(?:da\s+)?fatura|valor\s+(?:total\s+)?da\s+fatura/i,92],['Total a pagar',/total\s+a\s+pagar|valor\s+a\s+pagar/i,88],['Fatura atual',/fatura\s+atual|fatura\s+fechada/i,82],['Saldo atual',/saldo\s+atual/i,78]];
- const money=/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/g;
- lines.forEach((line,i)=>{const ctx=[lines[i-1]||'',line,lines[i+1]||''].join(' ');let m;while((m=money.exec(line))){const amount=brMoneyToNumber(m[0]);if(amount<1)continue;let label='Valor encontrado',score=20;for(const[r,rx,s]of rules)if(rx.test(ctx)){label=r;score=s;break;}if(/pagamento\s+m[ií]nimo/i.test(ctx)){label='Pagamento mínimo';score=5;}if(/limite/i.test(ctx)){label='Limite';score=8;}out.push({amount,label,score,context:ctx});}});
- const seen=new Set();return out.sort((a,b)=>b.score-a.score||b.amount-a.amount).filter(x=>{const k=x.amount.toFixed(2)+'|'+x.label;if(seen.has(k))return false;seen.add(k);return true;}).slice(0,15);
-}
-function extractLimit(text){const m=text.match(/limite(?:\s+total|\s+do\s+cart[aã]o)?[^\d]{0,40}(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/i);return m?brMoneyToNumber(m[1]):0;}
-async function extractPdfText(file){const bytes=new Uint8Array(await file.arrayBuffer()),pdf=await pdfjsLib.getDocument({data:bytes}).promise,pages=[];for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i),content=await page.getTextContent();pages.push(content.items.map(x=>x.str).join(' '));}return pages.join('\n');}
-function resetPdfImport(){els.pdfFileInput.value='';els.pdfReading.classList.add('hidden');els.pdfResult.classList.add('hidden');els.pdfExtractPreview.textContent='';}
-async function handlePdf(file){
- if(!file)return;els.pdfReading.classList.remove('hidden');els.pdfResult.classList.add('hidden');
- try{
-  const text=await extractPdfText(file);if(text.trim().length<30)throw new Error('Este PDF parece digitalizado como imagem. Esta versão lê PDFs com texto selecionável.');
-  const bank=detectBank(text),type=detectDebtType(text),candidates=extractMoneyCandidates(text),best=candidates.find(x=>x.score>=60)||candidates[0];
-  const due=extractDay(text,[/vencimento[^\n]{0,40}?(\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?)/i,/vence\s+(?:em|dia)?\s*(\d{1,2})/i]);
-  const close=extractDay(text,[/fechamento[^\n]{0,40}?(\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?)/i,/fecha\s+(?:em|dia)?\s*(\d{1,2})/i]);
-  els.pdfDetectedBank.textContent=bank;els.pdfBank.value=bank==='Banco não identificado'?'':bank;els.pdfType.value=type;els.pdfDetail.value=type==='credit_card'?'Cartão de crédito':'';
-  els.pdfAmountCandidates.innerHTML=candidates.length?candidates.map(x=>`<option value="${x.amount}">${esc(x.label)} — ${fmt.format(x.amount)}</option>`).join(''):'<option value="">Nenhum valor identificado</option>';
-  els.pdfAmount.value=best?.amount||'';if(best)els.pdfAmountCandidates.value=String(best.amount);els.pdfCardLimit.value=extractLimit(text)||'';els.pdfDueDay.value=due||'';els.pdfCloseDay.value=close||'';
-  els.pdfConfidenceText.textContent=best?.score>=80?'Boa confiança na leitura. Confira e salve.':'Confira o valor antes de salvar.';
-  els.pdfExtractPreview.textContent=`Arquivo: ${file.name}\nBanco: ${bank}\nTipo: ${accountTypeLabel(type)}\n\n${text.slice(0,5000)}`;els.pdfResult.classList.remove('hidden');
- }catch(e){alert(e.message||'Não consegui ler o PDF.');}finally{els.pdfReading.classList.add('hidden');}
-}
-function savePdfAsAccount(){const name=els.pdfBank.value.trim(),original=Number(els.pdfAmount.value),type=els.pdfType.value||'other';if(!name||original<=0)return alert('Confira o banco e o valor.');const a={id:crypto.randomUUID?.()||String(Date.now()),name,detail:els.pdfDetail.value.trim()||accountTypeLabel(type),type,original,payments:[],source:'pdf',importedAt:Date.now()};if(type==='credit_card'){a.cardLimit=Number(els.pdfCardLimit.value)||0;a.cardDueDay=Number(els.pdfDueDay.value)||null;a.cardCloseDay=Number(els.pdfCloseDay.value)||null;}state.accounts.push(a);save();els.pdfImportDialog.close();resetPdfImport();}
 
+let pendingPdfImport=null;
+
+function brMoneyToNumber(v){
+ let s=String(v||'').replace(/\s/g,'').replace(/R\$/gi,'').replace(/[^\d.,-]/g,'');
+ if(!s)return 0;
+ if(s.includes(',')&&s.includes('.'))s=s.replace(/\./g,'').replace(',','.');
+ else if(s.includes(','))s=s.replace(',','.');
+ const n=Number(s);
+ return Number.isFinite(n)?Math.abs(n):0;
+}
+function moneyFromMatch(text,rx){
+ const m=text.match(rx); return m?brMoneyToNumber(m[1]):0;
+}
+function normalizeName(v=''){
+ return v.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+}
+function typeFromDescription(desc=''){
+ const d=normalizeName(desc);
+ if(d.includes('cartao'))return'credit_card';
+ if(d.includes('consign'))return'consigned';
+ if(d.includes('financiamento'))return'financing';
+ if(d.includes('credito pessoal')||d.includes('emprestimo'))return'loan';
+ if(d.includes('cheque especial'))return'overdraft';
+ return'other';
+}
+function accountTypeLabel(type){
+ return ({
+  credit_card:'Cartão de crédito',loan:'Empréstimo',consigned:'Consignado',
+  financing:'Financiamento',personal:'Dívida pessoal',overdraft:'Cheque especial',other:'Outra conta'
+ })[type]||'Outra conta';
+}
+function accountTypeIcon(type){
+ return ({credit_card:'💳',loan:'💰',consigned:'📄',financing:'🏦',personal:'🤝',overdraft:'🏧',other:'▤'})[type]||'▤';
+}
+function toggleAccountTypeFields(){
+ const isCard=els.accountType?.value==='credit_card';
+ els.creditCardFields?.classList.toggle('hidden',!isCard);
+}
+function compactPdfText(text){
+ return String(text||'').replace(/\u00a0/g,' ').replace(/[ \t]+/g,' ').replace(/\n{2,}/g,'\n').trim();
+}
+function sliceBetween(text,startRx,endRx){
+ const s=text.search(startRx);
+ if(s<0)return'';
+ const rest=text.slice(s);
+ const e=rest.slice(1).search(endRx);
+ return e<0?rest:rest.slice(0,e+1);
+}
+function makeImportItem({bank,detail,type,amount,sourceKey,source,meta={}}){
+ return {
+  bank,detail,type:type||'other',amount:Number(amount)||0,sourceKey,
+  source,meta,selected:true
+ };
+}
+
+/* ---------- SCR / REGISTRATO ----------
+   Parser desenhado a partir do PDF real enviado pelo usuário.
+   Não importa "Limites de crédito" como dívida.
+*/
+function parseSCR(text){
+ const t=compactPdfText(text);
+ if(!/Relat[oó]rio de Empr[eé]stimos e Financiamentos\s*\(SCR\)/i.test(t))return null;
+
+ const items=[];
+ const add=(bank,detail,type,amount,key,meta={})=>{
+   if(amount>0)items.push(makeImportItem({bank,detail,type,amount,sourceKey:`scr:${key}`,source:'scr',meta}));
+ };
+
+ const blocks=[
+  {
+   bank:'Mercado Crédito',
+   rx:/MERCADO CR[EÉ]DITO SOCIEDADE DE CR[EÉ]DITO[\s\S]*?(?=MERCADO PAGO INSTITUI[CÇ][AÃ]O|NU FINANCEIRA|COOPERATIVA DE CR[EÉ]DITO|BANCO DIGIO|PICPAY BANK|COOPERATIVA DE CR[EÉ]DITO E INVESTIMENTO|BANCO COOPERATIVO SICOOB|Relat[oó]rio emitido por:|$)/i,
+   rows:[['Crédito pessoal','loan',/Cr[eé]dito pessoal\s*-\s*sem consigna[cç][aã]o em folha de pagamento\s*R\$\s*([\d.]+,\d{2})/i,'mercado-credito:pessoal']]
+  },
+  {
+   bank:'Mercado Pago',
+   rx:/MERCADO PAGO INSTITUI[CÇ][AÃ]O DE PAGAMENTO LTDA\.[\s\S]*?(?=NU FINANCEIRA|COOPERATIVA DE CR[EÉ]DITO|BANCO DIGIO|PICPAY BANK|COOPERATIVA DE CR[EÉ]DITO E INVESTIMENTO|BANCO COOPERATIVO SICOOB|Relat[oó]rio emitido por:|$)/i,
+   rows:[['Cartão de crédito','credit_card',/Cart[aã]o de cr[eé]dito\s*-\s*compra [aà] vista e parcelado lojista\s*R\$\s*([\d.]+,\d{2})/i,'mercado-pago:cartao']]
+  },
+  {
+   bank:'Nubank',
+   rx:/NU FINANCEIRA S\.A\.[\s\S]*?(?=COOPERATIVA DE CR[EÉ]DITO, POUPAN[CÇ]A|BANCO DIGIO|PICPAY BANK|COOPERATIVA DE CR[EÉ]DITO E INVESTIMENTO|BANCO COOPERATIVO SICOOB|Relat[oó]rio emitido por:|$)/i,
+   rows:[['Cartão de crédito','credit_card',/Cart[aã]o de cr[eé]dito\s*R\$\s*([\d.]+,\d{2})/i,'nubank:cartao']]
+  },
+  {
+   bank:'Digio',
+   rx:/BANCO DIGIO S\.A\.[\s\S]*?(?=PICPAY BANK|COOPERATIVA DE CR[EÉ]DITO E INVESTIMENTO|BANCO COOPERATIVO SICOOB|Relat[oó]rio emitido por:|$)/i,
+   rows:[['Crédito pessoal','loan',/Cr[eé]dito pessoal\s*-\s*sem consigna[cç][aã]o em folha de pagamento\s*R\$\s*([\d.]+,\d{2})/i,'digio:pessoal']]
+  },
+  {
+   bank:'PicPay',
+   rx:/PICPAY BANK\s*-\s*BANCO M[ÚU]LTIPLO S\.A[\s\S]*?(?=COOPERATIVA DE CR[EÉ]DITO E INVESTIMENTO|BANCO COOPERATIVO SICOOB|Relat[oó]rio emitido por:|$)/i,
+   rows:[['Crédito pessoal','loan',/Cr[eé]dito pessoal\s*-\s*sem consigna[cç][aã]o em folha de pagamento\s*R\$\s*([\d.]+,\d{2})/i,'picpay:pessoal']]
+  },
+  {
+   bank:'Cresol',
+   rx:/COOPERATIVA DE CR[EÉ]DITO E INVESTIMENTO COM INTERA[CÇ][AÃ]O SOLID[ÁA]RIA ESS[EÊ]NCIA[\s\S]*?(?=BANCO COOPERATIVO SICOOB|Relat[oó]rio emitido por:|$)/i,
+   rows:[['Cheque especial','overdraft',/Cheque especial\s*R\$\s*([\d.]+,\d{2})/i,'cresol:cheque']]
+  },
+  {
+   bank:'Sicoob',
+   rx:/BANCO COOPERATIVO SICOOB S\.A\.[\s\S]*?(?=Relat[oó]rio emitido por:|$)/i,
+   rows:[['Cartão de crédito','credit_card',/Cart[aã]o de cr[eé]dito\s*-\s*compra [aà] vista e parcelado lojista\s*R\$\s*([\d.]+,\d{2})/i,'sicoob:cartao']]
+  }
+ ];
+
+ for(const def of blocks){
+   const m=t.match(def.rx); if(!m)continue;
+   const block=m[0];
+   for(const [detail,type,rx,key] of def.rows){
+     add(def.bank,detail,type,moneyFromMatch(block,rx),key);
+   }
+ }
+
+ // Sicredi spans page 2 -> page 3 in the supplied SCR, so parse it separately.
+ const sicStart=t.search(/COOPERATIVA DE CR[EÉ]DITO, POUPAN[CÇ]A E INVESTIMENTO OURO BRANCO[\s\S]*?SICREDI OURO BRANCO RS\/MG/i);
+ if(sicStart>=0){
+   const after=t.slice(sicStart);
+   const endCandidates=[
+     after.search(/BANCO DIGIO S\.A\./i),
+     after.search(/PICPAY BANK/i),
+     after.search(/COOPERATIVA DE CR[EÉ]DITO E INVESTIMENTO COM INTERA[CÇ][AÃ]O SOLID[ÁA]RIA/i)
+   ].filter(x=>x>0);
+   const end=endCandidates.length?Math.min(...endCandidates):after.length;
+   const b=after.slice(0,end);
+   add('Sicredi','Crédito pessoal','loan',
+     moneyFromMatch(b,/Cr[eé]dito pessoal\s*-\s*sem consigna[cç][aã]o em folha de pagamento\s*R\$\s*([\d.]+,\d{2})/i),
+     'sicredi:pessoal');
+   add('Sicredi','Cartão de crédito','credit_card',
+     moneyFromMatch(b,/Cart[aã]o de cr[eé]dito\s*R\$\s*([\d.]+,\d{2})/i),
+     'sicredi:cartao');
+   add('Sicredi','Cheque especial','overdraft',
+     moneyFromMatch(b,/Cheque especial\s*R\$\s*([\d.]+,\d{2})/i),
+     'sicredi:cheque');
+   add('Sicredi','Cartão — compras à vista/parceladas','credit_card',
+     moneyFromMatch(b,/Cart[aã]o de cr[eé]dito\s*-\s*compra [aà] vista e parcelado lojista\s*R\$\s*([\d.]+,\d{2})/i),
+     'sicredi:cartao-compras');
+ }
+
+ const refMonth=(t.match(/M[eê]s de refer[eê]ncia:\s*(\d{2}\/\d{4})/i)||[])[1]||'';
+ const reportTotal=moneyFromMatch(t,/M[eê]s de refer[eê]ncia:\s*\d{2}\/\d{4}\s*R\$\s*([\d.]+,\d{2})/i);
+ return {
+   kind:'scr',
+   title:'SCR / Registrato — Banco Central',
+   reference:refMonth,
+   reportTotal,
+   items,
+   note:'O SCR é uma fotografia mensal. Limites disponíveis não são somados como dívida. A importação atualiza contas equivalentes para evitar duplicidade.'
+ };
+}
+
+/* ---------- NUBANK DDC ----------
+   Parser desenhado a partir do Documento Descritivo de Crédito enviado.
+*/
+function parseNubankDDC(text){
+ const t=compactPdfText(text);
+ if(!/Documento Descritivo de Cr[eé]dito\s*-\s*DDC/i.test(t))return null;
+ if(!/Saldo devedor consolidado:/i.test(t))return null;
+
+ const consolidated=moneyFromMatch(t,/Saldo devedor consolidado:\s*R\$\s*([\d.]+,\d{2})/i);
+ const usedLimit=moneyFromMatch(t,/Limite de cr[eé]dito utilizado:\s*R\$\s*([\d.]+,\d{2})/i);
+ const totalLimit=moneyFromMatch(t,/Limite total:\s*R\$\s*([\d.]+,\d{2})/i);
+ const opCount=Number((t.match(/Quantidade de opera[cç][oõ]es:\s*(\d+)/i)||[])[1]||0);
+ const avgCet=(t.match(/Taxa de Juros Efetiva M[eé]dia Ponderada\s*\(a\.a%\):\s*([\d.,]+)%/i)||[])[1]||'';
+
+ const items=[];
+ const contractRx=/DADOS DO CONTRATO\s+N[uú]mero do contrato:\s*(\d+)([\s\S]*?)(?=DADOS DO CONTRATO\s+N[uú]mero do contrato:|$)/gi;
+ let m;
+ while((m=contractRx.exec(t))){
+   const number=m[1],b=m[2];
+   const amount=moneyFromMatch(b,/Saldo devedor total:\s*R\$\s*([\d.]+,\d{2})/i);
+   if(!amount)continue;
+   const modality=(b.match(/Modalidade:\s*([^\n]+?)(?=\s+Limite total:|\s+Valor financiado|\s+Valor original|\n|$)/i)||[])[1]?.trim()||'Operação de crédito';
+   const cet=(b.match(/Custo efetivo total\s*\(CET\):\s*([\d.,]+)%\s*a\.a\./i)||[])[1]||'';
+   const rate=(b.match(/Taxa de juros efetiva do contrato:\s*([\d.,]+)%\s*a\.a\./i)||[])[1]||'';
+   const totalInstallments=Number((b.match(/Quantidade de parcelas:\s*(\d+)/i)||[])[1]||0);
+   const paidInstallments=Number((b.match(/Quantidade de parcelas pagas:\s*(\d+)/i)||[])[1]||0);
+   const remainingInstallments=Number((b.match(/Quantidade de parcelas [aà] vencer:\s*(\d+)/i)||[])[1]||0);
+   const overdueInstallments=Number((b.match(/Quantidade de parcelas vencidas e n[aã]o pagas:\s*(\d+)/i)||[])[1]||0);
+   const lastDue=(b.match(/Data de vencimento da [uú]ltima parcela:\s*(\d{2}\/\d{2}\/\d{4})/i)||[])[1]||'';
+   items.push(makeImportItem({
+     bank:'Nubank',
+     detail:modality,
+     type:'credit_card',
+     amount,
+     sourceKey:`nubank-ddc:${number}`,
+     source:'nubank-ddc',
+     meta:{contractNumber:number,cet,rate,totalInstallments,paidInstallments,remainingInstallments,overdueInstallments,lastDue,totalLimit}
+   }));
+ }
+
+ return {
+   kind:'nubank-ddc',
+   title:'Nubank — Documento Descritivo de Crédito (DDC)',
+   reference:'Atualizado pelo DDC',
+   reportTotal:consolidated,
+   items,
+   meta:{consolidated,usedLimit,totalLimit,opCount,avgCet},
+   note:`Saldo devedor consolidado: ${fmt.format(consolidated)}. O limite utilizado (${fmt.format(usedLimit)}) é apenas informativo e não é somado novamente.`
+ };
+}
+
+async function extractPdfText(file){
+ const bytes=new Uint8Array(await file.arrayBuffer());
+ const pdf=await pdfjsLib.getDocument({data:bytes}).promise;
+ const pages=[];
+ for(let i=1;i<=pdf.numPages;i++){
+   const page=await pdf.getPage(i);
+   const content=await page.getTextContent();
+   pages.push(content.items.map(x=>x.str).join(' '));
+ }
+ return pages.join('\n');
+}
+function resetPdfImport(){
+ pendingPdfImport=null;
+ els.pdfFileInput.value='';
+ els.pdfReading.classList.add('hidden');
+ els.pdfResult.classList.add('hidden');
+ els.pdfItemsList.innerHTML='';
+ els.pdfExtractPreview.textContent='';
+}
+function renderPdfPreview(result,text,file){
+ pendingPdfImport=result;
+ els.pdfDocumentType.textContent=result.title;
+ const sum=result.items.filter(x=>x.selected).reduce((s,x)=>s+x.amount,0);
+ els.pdfImportTotal.textContent=fmt.format(result.reportTotal||sum);
+ els.pdfItemCount.textContent=`${result.items.length} ${result.items.length===1?'item':'itens'}`;
+ els.pdfImportNotice.textContent=result.note||'Confira os itens antes de importar.';
+ els.pdfItemsList.innerHTML=result.items.length?result.items.map((item,i)=>`
+   <label class="pdf-import-item">
+     <input type="checkbox" data-pdf-item="${i}" checked />
+     <span class="pdf-item-icon">${accountTypeIcon(item.type)}</span>
+     <span class="pdf-item-info">
+       <strong>${esc(item.bank)} — ${esc(item.detail)}</strong>
+       <small>${esc(accountTypeLabel(item.type))}${item.meta?.cet?` • CET ${esc(item.meta.cet)}% a.a.`:''}${item.meta?.remainingInstallments?` • ${item.meta.remainingInstallments} parcelas a vencer`:''}</small>
+     </span>
+     <b>${fmt.format(item.amount)}</b>
+   </label>
+ `).join(''):'<div class="empty">Nenhuma dívida compatível encontrada.</div>';
+ els.pdfExtractPreview.textContent=`Arquivo: ${file.name}\nTipo: ${result.title}\n${result.reference?`Referência: ${result.reference}\n`:''}\n${text.slice(0,7000)}`;
+ els.pdfResult.classList.remove('hidden');
+}
+async function handlePdf(file){
+ if(!file)return;
+ els.pdfReading.classList.remove('hidden');
+ els.pdfResult.classList.add('hidden');
+ try{
+   const text=await extractPdfText(file);
+   if(text.trim().length<30)throw new Error('Este PDF não possui texto suficiente para leitura automática.');
+   const result=parseSCR(text)||parseNubankDDC(text);
+   if(!result)throw new Error('Ainda não reconheço este modelo de PDF. Atualmente estão prontos: SCR/Registrato e DDC do Nubank.');
+   renderPdfPreview(result,text,file);
+ }catch(e){
+   alert(e.message||'Não consegui interpretar o PDF.');
+ }finally{
+   els.pdfReading.classList.add('hidden');
+ }
+}
+function findMatchingAccount(item){
+ // 1) Exact source key from an earlier import.
+ let a=state.accounts.find(x=>x.sourceKey&&x.sourceKey===item.sourceKey);
+ if(a)return a;
+
+ // 2) Same bank + normalized detail/type, including old manually-created account.
+ const bn=normalizeName(item.bank),dn=normalizeName(item.detail);
+ a=state.accounts.find(x=>{
+   if(normalizeName(x.name)!==bn)return false;
+   const sameType=(x.type||'other')===item.type || (!x.type && item.type==='other');
+   const xd=normalizeName(x.detail||'');
+   return sameType && (xd===dn || (!xd && item.detail));
+ });
+ return a||null;
+}
+function upsertImportedItem(item){
+ const existing=findMatchingAccount(item);
+ if(existing){
+   // Keep payment history, but refresh the current debt balance and metadata.
+   existing.name=item.bank;
+   existing.detail=item.detail;
+   existing.type=item.type;
+   existing.original=item.amount + paid(existing); // remaining becomes imported current balance
+   existing.source=item.source;
+   existing.sourceKey=item.sourceKey;
+   existing.importedAt=Date.now();
+   existing.importMeta={...(existing.importMeta||{}),...(item.meta||{})};
+   if(item.meta?.totalLimit)existing.cardLimit=item.meta.totalLimit;
+   return 'updated';
+ }
+ const a={
+   id:crypto.randomUUID?.()||String(Date.now()),
+   name:item.bank,detail:item.detail,type:item.type,
+   original:item.amount,payments:[],source:item.source,sourceKey:item.sourceKey,
+   importedAt:Date.now(),importMeta:item.meta||{}
+ };
+ if(item.meta?.totalLimit)a.cardLimit=item.meta.totalLimit;
+ state.accounts.push(a);
+ return 'created';
+}
+function removeSupersededNubankScr(){
+ // DDC is more current/detail-rich than the monthly SCR. Remove only Nubank rows imported from SCR.
+ state.accounts=state.accounts.filter(a=>!(a.source==='scr' && normalizeName(a.name)==='nubank'));
+}
+async function savePdfImport(){
+ if(!pendingPdfImport)return;
+ const selected=pendingPdfImport.items.filter((x,i)=>{
+   const cb=document.querySelector(`[data-pdf-item="${i}"]`);
+   return cb?.checked;
+ });
+ if(!selected.length)return alert('Selecione pelo menos uma dívida para importar.');
+
+ if(pendingPdfImport.kind==='nubank-ddc')removeSupersededNubankScr();
+
+ let created=0,updated=0;
+ selected.forEach(item=>{
+   const action=upsertImportedItem(item);
+   if(action==='created')created++; else updated++;
+ });
+
+ await save();
+ els.pdfImportDialog.close();
+ resetPdfImport();
+ alert(`Importação concluída: ${created} criada(s) e ${updated} atualizada(s).`);
+}
 function render(){
  const t=totals();
  els.totalRemaining.textContent=fmt.format(t.remaining);
@@ -304,8 +598,7 @@ $('#addCostBtn').addEventListener('click',openCost);
 $('#addAccountBtn').addEventListener('click',()=>openAccount());
 $('#importPdfBtn').addEventListener('click',()=>{resetPdfImport();els.pdfImportDialog.showModal();});
 els.pdfFileInput.addEventListener('change',e=>handlePdf(e.target.files?.[0]));
-els.pdfAmountCandidates.addEventListener('change',()=>{if(els.pdfAmountCandidates.value)els.pdfAmount.value=els.pdfAmountCandidates.value;});
-$('#savePdfImportBtn').addEventListener('click',savePdfAsAccount);
+$('#savePdfImportBtn').addEventListener('click',savePdfImport);
 $('#backupBtn').addEventListener('click',()=>els.backupDialog.showModal());
 els.monthFilter.addEventListener('change',renderCosts);
 $$('.nav-btn').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
