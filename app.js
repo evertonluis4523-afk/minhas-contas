@@ -1,9 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/build/pdf.mjs";
-pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/build/pdf.worker.mjs";
-
 const firebaseConfig = {
   apiKey: "AIzaSyBDOR9f748UNoGP5c72Y-vdmDBcffM8tMI",
   authDomain: "rm-contas.firebaseapp.com",
@@ -381,8 +378,9 @@ function parseNubankDDC(text){
 }
 
 async function extractPdfText(file){
+ if(!window.pdfjsLib) throw new Error('Leitor de PDF não carregou. Feche o aplicativo e abra novamente com internet.');
  const bytes=new Uint8Array(await file.arrayBuffer());
- const pdf=await pdfjsLib.getDocument({data:bytes}).promise;
+ const pdf=await window.pdfjsLib.getDocument({data:bytes}).promise;
  const pages=[];
  for(let i=1;i<=pdf.numPages;i++){
    const page=await pdf.getPage(i);

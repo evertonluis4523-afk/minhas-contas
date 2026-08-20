@@ -224,7 +224,13 @@
       <div class="backup-grid"><button id="exportBtn" class="primary-btn" type="button">Exportar backup</button><label class="import-btn">Importar backup<input id="importInput" type="file" accept="application/json" hidden /></label></div>
     </div>
   </dialog>
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    }
+  </script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
