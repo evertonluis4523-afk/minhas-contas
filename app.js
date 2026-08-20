@@ -100,9 +100,6 @@ function dateBR(v){if(!v)return'';const[y,m,d]=v.split('-');return`${d}/${m}/${y
 function paid(a){return(a.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0);}
 function remaining(a){return Math.max(0,Number(a.original)-paid(a));}
 function accountDisplay(a){return a.detail?`${a.name} — ${a.detail}`:a.name;}
-function accountTypeLabel(t){return({credit_card:'Cartão de crédito',loan:'Empréstimo',consigned:'Consignado',financing:'Financiamento',personal:'Dívida pessoal',other:'Outra conta'})[t]||'Outra conta';}
-function accountTypeIcon(t){return({credit_card:'💳',loan:'💰',consigned:'📄',financing:'🏦',personal:'🤝',other:'▤'})[t]||'▤';}
-function toggleAccountTypeFields(){els.creditCardFields?.classList.toggle('hidden',els.accountType?.value!=='credit_card');}
 
 function creditorNames(){return [...new Set(state.accounts.map(a=>a.name))].sort((a,b)=>a.localeCompare(b,'pt-BR'));}
 function fillCreditorSelect(){
