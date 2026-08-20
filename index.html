@@ -18,18 +18,19 @@
       <div class="lock-mark">🔒</div>
       <p class="eyebrow dark">ACESSO PROTEGIDO</p>
       <h1>Minhas Contas</h1>
-      <p id="loginHelp" class="login-help">Digite sua senha para continuar.</p>
+      <p id="loginHelp" class="login-help">Entre com seu e-mail e senha.</p>
       <form id="loginForm">
-        <label id="passwordLabel">Senha
-          <input id="loginPassword" type="password" inputmode="numeric" autocomplete="current-password" minlength="4" required placeholder="••••" />
+        <label>E-mail
+          <input id="loginEmail" type="email" autocomplete="email" required placeholder="voce@email.com" />
         </label>
-        <label id="confirmLabel" class="hidden">Confirmar senha
-          <input id="confirmPassword" type="password" inputmode="numeric" autocomplete="new-password" minlength="4" placeholder="••••" />
+        <label>Senha
+          <input id="loginPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="••••••" />
         </label>
         <button id="loginSubmit" class="primary-btn full" type="submit">Entrar</button>
       </form>
-      <button id="resetPasswordBtn" class="text-btn danger hidden" type="button">Esqueci / redefinir acesso</button>
-      <p class="security-note">Os dados ficam salvos neste aparelho.</p>
+      <button id="registerBtn" class="text-btn" type="button">Criar primeiro acesso</button>
+      <button id="resetPasswordBtn" class="text-btn" type="button">Esqueci minha senha</button>
+      <p class="security-note">Contas, pagamentos e custos ficam sincronizados no Firebase.</p>
     </div>
   </section>
 
@@ -131,13 +132,7 @@
   <dialog id="accountDialog" class="modal">
     <form id="accountForm" method="dialog" class="modal-card">
       <div class="modal-head"><div><span class="eyebrow dark">CADASTRO</span><h3>Adicionar conta</h3></div><button type="button" class="close-btn" data-close="accountDialog">×</button></div>
-      <label>Banco / Credor
-        <select id="accountCreditor">
-          <option value="">Novo banco / credor</option>
-        </select>
-      </label>
-      <label id="accountNameLabel">Nome do banco / credor<input id="accountName" type="text" maxlength="40" required placeholder="Ex.: Banco X" /></label>
-      <label>Nome da conta / contrato<input id="accountDetail" type="text" maxlength="50" placeholder="Ex.: Cartão, Empréstimo, Parcela 01" /></label>
+      <label>Nome<input id="accountName" type="text" maxlength="40" required placeholder="Ex.: Banco X" /></label>
       <label>Valor inicial<input id="accountAmount" type="number" min="0.01" step="0.01" inputmode="decimal" required placeholder="0,00" /></label>
       <div class="modal-actions"><button type="button" class="ghost-btn" data-close="accountDialog">Cancelar</button><button type="submit" class="primary-btn">Adicionar</button></div>
     </form>
@@ -169,6 +164,6 @@
     </div>
   </dialog>
 
-  <script src="./app.js" defer></script>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>

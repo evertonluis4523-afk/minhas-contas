@@ -1,3 +1,24 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBDOR9f748UNoGP5c72Y-vdmDBcffM8tMI",
+  authDomain: "rm-contas.firebaseapp.com",
+  databaseURL: "https://rm-contas-default-rtdb.firebaseio.com",
+  projectId: "rm-contas",
+  storageBucket: "rm-contas.firebasestorage.app",
+  messagingSenderId: "414740463069",
+  appId: "1:414740463069:web:f8035314dcfbf962c80a34",
+  measurementId: "G-M496PJCSSX"
+};
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getDatabase(firebaseApp);
+let currentUser = null;
+let cloudReady = false;
+let unsubscribeData = null;
+
 const STORAGE_KEY='minhas-contas-v3';
 const LEGACY_KEYS=['minhas-contas-v1','minhas-contas-v2'];
 const AUTH_KEY='minhas-contas-auth-v1';
@@ -10,8 +31,7 @@ const fmt=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const els={
- loginScreen:$('#loginScreen'),app:$('#app'),loginForm:$('#loginForm'),loginPassword:$('#loginPassword'),confirmPassword:$('#confirmPassword'),
- confirmLabel:$('#confirmLabel'),loginHelp:$('#loginHelp'),loginSubmit:$('#loginSubmit'),resetPasswordBtn:$('#resetPasswordBtn'),
+ loginScreen:$('#loginScreen'),app:$('#app'),loginForm:$('#loginForm'),loginEmail:$('#loginEmail'),loginPassword:$('#loginPassword'),loginHelp:$('#loginHelp'),loginSubmit:$('#loginSubmit'),resetPasswordBtn:$('#resetPasswordBtn'),
  pageTitle:$('#pageTitle'),pageSubtitle:$('#pageSubtitle'),debtSummary:$('#debtSummary'),costSummary:$('#costSummary'),
  totalRemaining:$('#totalRemaining'),totalOriginal:$('#totalOriginal'),totalPaid:$('#totalPaid'),paidPercent:$('#paidPercent'),
  accountCount:$('#accountCount'),accountsList:$('#accountsList'),paymentsList:$('#paymentsList'),
@@ -36,7 +56,43 @@ function loadState(){
  }catch{}
  return {accounts:INITIAL_ACCOUNTS,costs:[]};
 }
-function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));render();}
+function saveLocal(){
+ localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+}
+async function save(){
+ saveLocal();
+ render();
+ if(currentUser && cloudReady){
+   try{await set(ref(db,`users/${currentUser.uid}/finance`),state);}
+   catch(err){console.error('Falha ao sincronizar com Firebase',err);}
+ }
+}
+async function startCloudSync(user){
+ currentUser=user;
+ const financeRef=ref(db,`users/${user.uid}/finance`);
+ const snap=await get(financeRef);
+ if(snap.exists()){
+   const cloud=snap.val();
+   cloud.accounts ||= [];
+   cloud.costs ||= [];
+   state=cloud;
+   saveLocal();
+ }else{
+   await set(financeRef,state);
+ }
+ cloudReady=true;
+ if(unsubscribeData) unsubscribeData();
+ unsubscribeData=onValue(financeRef,snapshot=>{
+   if(!snapshot.exists()) return;
+   const next=snapshot.val();
+   next.accounts ||= [];
+   next.costs ||= [];
+   state=next;
+   saveLocal();
+   render();
+ });
+ render();
+}
 function esc(v=''){return String(v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
 function dateBR(v){if(!v)return'';const[y,m,d]=v.split('-');return`${d}/${m}/${y}`;}
 function paid(a){return(a.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0);}
@@ -73,39 +129,48 @@ function today(){return new Date().toISOString().slice(0,10);}
 function currentMonth(){return today().slice(0,7);}
 function monthLabel(v){if(!v)return'—';const[y,m]=v.split('-');return new Date(Number(y),Number(m)-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).replace(/^./,x=>x.toUpperCase());}
 
-async function hashPassword(value){
- const data=new TextEncoder().encode(value);
- if(crypto.subtle){const buf=await crypto.subtle.digest('SHA-256',data);return[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');}
- return btoa(unescape(encodeURIComponent(value)));
+function showLogin(message='Entre com seu e-mail e senha.'){
+ els.loginHelp.textContent=message;
+ els.app.classList.add('hidden');
+ els.loginScreen.classList.remove('hidden');
 }
-function hasPassword(){return !!localStorage.getItem(AUTH_KEY);}
-function setupLogin(){
- const first=!hasPassword();
- els.confirmLabel.classList.toggle('hidden',!first);
- els.resetPasswordBtn.classList.toggle('hidden',first);
- els.loginHelp.textContent=first?'Primeiro acesso: crie uma senha com pelo menos 4 caracteres.':'Digite sua senha para continuar.';
- els.loginSubmit.textContent=first?'Criar senha e entrar':'Entrar';
- els.loginPassword.autocomplete=first?'new-password':'current-password';
+function unlock(){
+ els.loginScreen.classList.add('hidden');
+ els.app.classList.remove('hidden');
+ els.loginForm.reset();
+ render();
 }
 els.loginForm.addEventListener('submit',async e=>{
  e.preventDefault();
+ const email=els.loginEmail.value.trim();
  const pass=els.loginPassword.value;
- if(pass.length<4)return alert('Use uma senha com pelo menos 4 caracteres.');
- if(!hasPassword()){
-   if(pass!==els.confirmPassword.value)return alert('As senhas não coincidem.');
-   localStorage.setItem(AUTH_KEY,await hashPassword(pass));
-   unlock();
- }else{
-   if(await hashPassword(pass)!==localStorage.getItem(AUTH_KEY))return alert('Senha incorreta.');
-   unlock();
+ try{
+   els.loginSubmit.disabled=true; els.loginSubmit.textContent='Entrando...';
+   await signInWithEmailAndPassword(auth,email,pass);
+ }catch(err){
+   showLogin('E-mail ou senha incorretos, ou acesso ainda não criado.');
+ }finally{
+   els.loginSubmit.disabled=false; els.loginSubmit.textContent='Entrar';
  }
 });
-function unlock(){els.loginScreen.classList.add('hidden');els.app.classList.remove('hidden');els.loginForm.reset();render();}
-function lock(){els.app.classList.add('hidden');els.loginScreen.classList.remove('hidden');setupLogin();els.loginPassword.focus();}
-$('#logoutBtn').addEventListener('click',lock);
-els.resetPasswordBtn.addEventListener('click',()=>{
- if(confirm('Redefinir a senha? Seus dados financeiros serão mantidos neste aparelho.')){localStorage.removeItem(AUTH_KEY);setupLogin();}
+$('#registerBtn').addEventListener('click',async()=>{
+ const email=els.loginEmail.value.trim();
+ const pass=els.loginPassword.value;
+ if(!email || pass.length<6) return alert('Informe o e-mail e uma senha com pelo menos 6 caracteres.');
+ try{
+   await createUserWithEmailAndPassword(auth,email,pass);
+   alert('Acesso criado. Seus dados serão vinculados a este usuário.');
+ }catch(err){
+   alert(err.code==='auth/email-already-in-use'?'Este e-mail já possui acesso.':'Não foi possível criar o acesso.');
+ }
 });
+els.resetPasswordBtn.addEventListener('click',async()=>{
+ const email=els.loginEmail.value.trim();
+ if(!email) return alert('Digite seu e-mail primeiro.');
+ try{await sendPasswordResetEmail(auth,email);alert('E-mail de redefinição enviado.');}
+ catch{alert('Não foi possível enviar a redefinição para este e-mail.');}
+});
+$('#logoutBtn').addEventListener('click',()=>signOut(auth));
 
 function render(){
  const t=totals();
@@ -224,5 +289,20 @@ $('#importInput').addEventListener('change',async e=>{const file=e.target.files?
 
 if('serviceWorker'in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));}
 els.monthFilter.value=currentMonth();
-setupLogin();
+showLogin('Verificando acesso...');
+onAuthStateChanged(auth,async user=>{
+  if(user){
+    try{
+      await startCloudSync(user);
+      unlock();
+    }catch(err){
+      console.error(err);
+      showLogin('Falha ao carregar seus dados do Firebase.');
+    }
+  }else{
+    currentUser=null; cloudReady=false;
+    if(unsubscribeData){unsubscribeData();unsubscribeData=null;}
+    showLogin();
+  }
+});
 render();
