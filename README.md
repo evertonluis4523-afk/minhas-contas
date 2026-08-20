@@ -27,3 +27,10 @@ Abra o endereço do GitHub Pages no Safari, toque em **Compartilhar** e depois e
 
 ## Dados
 Os dados ficam salvos localmente no aparelho/navegador usando `localStorage`. Use o menu de backup dentro do app para exportar os lançamentos periodicamente.
+
+
+## Versão 3
+- Tela de login por senha local (primeiro acesso cria a senha).
+- Área Controle de Custos com lançamentos por mês, categoria, local, data, valor e observação.
+- Resumo mensal por categoria.
+- Backup agora inclui contas, pagamentos e gastos.
