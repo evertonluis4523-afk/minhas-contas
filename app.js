@@ -47,10 +47,10 @@ let currentView='debts';
 function loadState(){
  try{
    const raw=localStorage.getItem(STORAGE_KEY);
-   if(raw){const x=JSON.parse(raw); x.costs ||= []; return x;}
+   if(raw){const x=JSON.parse(raw); x.costs ||= []; x.accounts ||= []; x.accounts.forEach(a=>a.payments ||= []); return x;}
    for(const key of LEGACY_KEYS){
      const old=localStorage.getItem(key);
-     if(old){const x=JSON.parse(old); x.costs ||= []; localStorage.setItem(STORAGE_KEY,JSON.stringify(x)); return x;}
+     if(old){const x=JSON.parse(old); x.costs ||= []; x.accounts ||= []; x.accounts.forEach(a=>a.payments ||= []); localStorage.setItem(STORAGE_KEY,JSON.stringify(x)); return x;}
    }
  }catch{}
  return {accounts:INITIAL_ACCOUNTS,costs:[]};
@@ -73,6 +73,7 @@ async function startCloudSync(user){
  if(snap.exists()){
    const cloud=snap.val();
    cloud.accounts ||= [];
+   cloud.accounts.forEach(a=>a.payments ||= []);
    cloud.costs ||= [];
    state=cloud;
    saveLocal();
@@ -85,6 +86,7 @@ async function startCloudSync(user){
    if(!snapshot.exists()) return;
    const next=snapshot.val();
    next.accounts ||= [];
+   next.accounts.forEach(a=>a.payments ||= []);
    next.costs ||= [];
    state=next;
    saveLocal();
@@ -606,10 +608,27 @@ document.addEventListener('click',e=>{
  const delPay=e.target.closest('[data-delete-payment]');if(delPay){const[aid,pid]=delPay.dataset.deletePayment.split('|');const a=state.accounts.find(x=>x.id===aid);if(a&&confirm('Excluir este pagamento?')){a.payments=a.payments.filter(p=>p.id!==pid);save();}}
  const delCost=e.target.closest('[data-delete-cost]');if(delCost&&confirm('Excluir este gasto?')){state.costs=state.costs.filter(c=>c.id!==delCost.dataset.deleteCost);save();}
 });
-els.paymentForm.addEventListener('submit',e=>{
- e.preventDefault();const a=state.accounts.find(x=>x.id===els.paymentAccount.value),amount=Number(els.paymentAmount.value);if(!a||amount<=0)return;
- const r=remaining(a);if(amount>r+.001&&!confirm(`O pagamento é maior que o saldo restante (${fmt.format(r)}). Registrar mesmo assim?`))return;
- a.payments.push({id:crypto.randomUUID?.()||String(Date.now()),amount,date:els.paymentDate.value,note:els.paymentNote.value.trim(),createdAt:Date.now()});save();els.paymentDialog.close();
+els.paymentForm.addEventListener('submit',async e=>{
+ e.preventDefault();
+ e.stopPropagation();
+ const accountId=els.paymentAccount.value;
+ const a=state.accounts.find(x=>String(x.id)===String(accountId));
+ const amount=Number(String(els.paymentAmount.value).replace(',','.'));
+ if(!a){alert('Não foi possível localizar a conta selecionada. Feche esta tela e tente novamente.');return;}
+ if(!Number.isFinite(amount)||amount<=0){alert('Informe um valor de pagamento válido.');return;}
+ if(!els.paymentDate.value){alert('Informe a data do pagamento.');return;}
+ a.payments ||= [];
+ const r=remaining(a);
+ if(amount>r+.001&&!confirm(`O pagamento é maior que o saldo restante (${fmt.format(r)}). Registrar mesmo assim?`))return;
+ const payment={id:crypto.randomUUID?.()||String(Date.now()),amount,date:els.paymentDate.value,note:els.paymentNote.value.trim(),createdAt:Date.now()};
+ a.payments.push(payment);
+ try{
+   await save();
+   els.paymentDialog.close();
+ }catch(err){
+   console.error('Erro ao salvar pagamento',err);
+   alert('O pagamento foi salvo neste aparelho, mas houve falha na sincronização. Tente novamente com internet.');
+ }
 });
 els.accountCreditor?.addEventListener('change',()=>{const creditor=els.accountCreditor.value;els.accountName.disabled=!!creditor;$('#accountNameLabel').classList.toggle('hidden',!!creditor);if(creditor)els.accountName.value=creditor;else els.accountName.value='';});
 els.accountType?.addEventListener('change',toggleAccountTypeFields);
