@@ -78,7 +78,7 @@
       <section id="debtsView">
         <section class="section-head">
           <div><h2>Contas</h2><p id="accountCount">0 contas</p></div>
-          <button id="addAccountBtn" class="secondary-btn">+ Conta</button>
+          <div class="section-actions"><button id="importPdfBtn" class="secondary-btn">⇧ Importar PDF</button><button id="addAccountBtn" class="secondary-btn">+ Conta</button></div>
         </section>
         <section id="accountsList" class="accounts-list" aria-live="polite"></section>
 
@@ -138,8 +138,10 @@
         </select>
       </label>
       <label id="accountNameLabel">Nome do banco / credor<input id="accountName" type="text" maxlength="40" required placeholder="Ex.: Banco X" /></label>
-      <label>Nome da conta / contrato<input id="accountDetail" type="text" maxlength="50" placeholder="Ex.: Cartão, Empréstimo, Parcela 01" /></label>
-      <label>Valor inicial<input id="accountAmount" type="number" min="0.01" step="0.01" inputmode="decimal" required placeholder="0,00" /></label>
+      <label>Tipo de dívida<select id="accountType" required><option value="other">Outra conta</option><option value="credit_card">Cartão de crédito</option><option value="loan">Empréstimo</option><option value="consigned">Consignado</option><option value="financing">Financiamento</option><option value="personal">Dívida pessoal</option></select></label>
+      <label>Nome da conta / contrato<input id="accountDetail" type="text" maxlength="50" placeholder="Ex.: Mastercard, Empréstimo 01" /></label>
+      <label>Saldo da dívida<input id="accountAmount" type="number" min="0.01" step="0.01" inputmode="decimal" required placeholder="0,00" /></label>
+      <div id="creditCardFields" class="conditional-fields hidden"><div class="field-grid"><label>Limite<input id="cardLimit" type="number" min="0" step="0.01" inputmode="decimal"></label><label>Vencimento (dia)<input id="cardDueDay" type="number" min="1" max="31"></label><label>Fechamento (dia)<input id="cardCloseDay" type="number" min="1" max="31"></label></div><p class="field-note">Somente o saldo da dívida entra no Total Geral.</p></div>
       <div class="modal-actions"><button type="button" class="ghost-btn" data-close="accountDialog">Cancelar</button><button type="submit" class="primary-btn">Adicionar</button></div>
     </form>
   </dialog>
@@ -161,6 +163,22 @@
       <div class="modal-actions"><button type="button" class="ghost-btn" data-close="costDialog">Cancelar</button><button type="submit" class="primary-btn">Salvar gasto</button></div>
     </form>
   </dialog>
+
+<dialog id="pdfImportDialog" class="modal"><div class="modal-card pdf-import-card">
+<div class="modal-head"><div><span class="eyebrow dark">IMPORTAÇÃO AUTOMÁTICA</span><h3>Importar PDF do banco</h3></div><button type="button" class="close-btn" data-close="pdfImportDialog">×</button></div>
+<label class="pdf-drop"><span class="pdf-drop-icon">PDF</span><strong>Selecionar PDF</strong><small>Fatura, contrato ou demonstrativo. O aplicativo tenta preencher tudo automaticamente.</small><input id="pdfFileInput" type="file" accept="application/pdf,.pdf" hidden></label>
+<div id="pdfReading" class="pdf-status hidden">Lendo documento…</div>
+<div id="pdfResult" class="hidden">
+<div class="import-detected"><span>Banco detectado</span><strong id="pdfDetectedBank">—</strong></div>
+<div class="field-grid import-grid"><label>Banco / credor<input id="pdfBank" type="text"></label><label>Tipo<select id="pdfType"><option value="credit_card">Cartão de crédito</option><option value="loan">Empréstimo</option><option value="consigned">Consignado</option><option value="financing">Financiamento</option><option value="other">Outra conta</option></select></label></div>
+<label>Conta / contrato<input id="pdfDetail" type="text" placeholder="Ex.: Mastercard, Empréstimo 01"></label>
+<label>Valor encontrado<select id="pdfAmountCandidates"></select></label>
+<label>Valor que entrará na dívida<input id="pdfAmount" type="number" min="0.01" step="0.01" inputmode="decimal"></label>
+<div class="field-grid"><label>Limite<input id="pdfCardLimit" type="number" min="0" step="0.01"></label><label>Vencimento (dia)<input id="pdfDueDay" type="number" min="1" max="31"></label><label>Fechamento (dia)<input id="pdfCloseDay" type="number" min="1" max="31"></label></div>
+<div class="pdf-confidence"><span id="pdfConfidenceText">Confira os dados antes de salvar.</span></div>
+<details class="pdf-debug"><summary>Ver texto identificado</summary><pre id="pdfExtractPreview"></pre></details>
+<div class="modal-actions"><button type="button" class="ghost-btn" data-close="pdfImportDialog">Cancelar</button><button id="savePdfImportBtn" type="button" class="primary-btn">Adicionar ao aplicativo</button></div>
+</div></div></dialog>
 
   <dialog id="backupDialog" class="modal">
     <div class="modal-card">

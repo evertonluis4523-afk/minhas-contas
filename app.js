@@ -1,6 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/build/pdf.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/build/pdf.worker.mjs";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBDOR9f748UNoGP5c72Y-vdmDBcffM8tMI",
@@ -36,10 +38,10 @@ const els={
  totalRemaining:$('#totalRemaining'),totalOriginal:$('#totalOriginal'),totalPaid:$('#totalPaid'),paidPercent:$('#paidPercent'),
  accountCount:$('#accountCount'),accountsList:$('#accountsList'),paymentsList:$('#paymentsList'),
  paymentDialog:$('#paymentDialog'),paymentForm:$('#paymentForm'),paymentAccount:$('#paymentAccount'),paymentAmount:$('#paymentAmount'),paymentDate:$('#paymentDate'),paymentNote:$('#paymentNote'),
- accountDialog:$('#accountDialog'),accountForm:$('#accountForm'),accountCreditor:$('#accountCreditor'),accountName:$('#accountName'),accountDetail:$('#accountDetail'),accountAmount:$('#accountAmount'),
+ accountDialog:$('#accountDialog'),accountForm:$('#accountForm'),accountCreditor:$('#accountCreditor'),accountName:$('#accountName'),accountDetail:$('#accountDetail'),accountType:$('#accountType'),accountAmount:$('#accountAmount'),creditCardFields:$('#creditCardFields'),cardLimit:$('#cardLimit'),cardDueDay:$('#cardDueDay'),cardCloseDay:$('#cardCloseDay'),
  costDialog:$('#costDialog'),costForm:$('#costForm'),costAmount:$('#costAmount'),costCategory:$('#costCategory'),costPlace:$('#costPlace'),costDate:$('#costDate'),costNote:$('#costNote'),
  monthFilter:$('#monthFilter'),monthSpent:$('#monthSpent'),monthCount:$('#monthCount'),monthName:$('#monthName'),categorySummary:$('#categorySummary'),costsList:$('#costsList'),costCount:$('#costCount'),
- debtsView:$('#debtsView'),costsView:$('#costsView'),backupDialog:$('#backupDialog'),fab:$('#fab')
+ debtsView:$('#debtsView'),costsView:$('#costsView'),backupDialog:$('#backupDialog'),pdfImportDialog:$('#pdfImportDialog'),pdfFileInput:$('#pdfFileInput'),pdfReading:$('#pdfReading'),pdfResult:$('#pdfResult'),pdfDetectedBank:$('#pdfDetectedBank'),pdfBank:$('#pdfBank'),pdfType:$('#pdfType'),pdfDetail:$('#pdfDetail'),pdfAmountCandidates:$('#pdfAmountCandidates'),pdfAmount:$('#pdfAmount'),pdfCardLimit:$('#pdfCardLimit'),pdfDueDay:$('#pdfDueDay'),pdfCloseDay:$('#pdfCloseDay'),pdfConfidenceText:$('#pdfConfidenceText'),pdfExtractPreview:$('#pdfExtractPreview'),fab:$('#fab')
 };
 
 let state=loadState();
@@ -98,6 +100,10 @@ function dateBR(v){if(!v)return'';const[y,m,d]=v.split('-');return`${d}/${m}/${y
 function paid(a){return(a.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0);}
 function remaining(a){return Math.max(0,Number(a.original)-paid(a));}
 function accountDisplay(a){return a.detail?`${a.name} — ${a.detail}`:a.name;}
+function accountTypeLabel(t){return({credit_card:'Cartão de crédito',loan:'Empréstimo',consigned:'Consignado',financing:'Financiamento',personal:'Dívida pessoal',other:'Outra conta'})[t]||'Outra conta';}
+function accountTypeIcon(t){return({credit_card:'💳',loan:'💰',consigned:'📄',financing:'🏦',personal:'🤝',other:'▤'})[t]||'▤';}
+function toggleAccountTypeFields(){els.creditCardFields?.classList.toggle('hidden',els.accountType?.value!=='credit_card');}
+
 function creditorNames(){return [...new Set(state.accounts.map(a=>a.name))].sort((a,b)=>a.localeCompare(b,'pt-BR'));}
 function fillCreditorSelect(){
  if(!els.accountCreditor)return;
@@ -107,6 +113,7 @@ function openAccount(creditor=''){
  els.accountForm.reset(); fillCreditorSelect(); els.accountCreditor.value=creditor;
  els.accountName.value=creditor; els.accountName.disabled=!!creditor;
  $('#accountNameLabel').classList.toggle('hidden',!!creditor);
+ els.accountType.value='other';toggleAccountTypeFields();
  els.accountDialog.showModal();
 }
 
@@ -172,6 +179,37 @@ els.resetPasswordBtn.addEventListener('click',async()=>{
 });
 $('#logoutBtn').addEventListener('click',()=>signOut(auth));
 
+
+function brMoneyToNumber(v){let s=String(v||'').replace(/\s/g,'').replace(/R\$/gi,'').replace(/[^\d.,-]/g,'');if(!s)return 0;if(s.includes(',')&&s.includes('.'))s=s.replace(/\./g,'').replace(',','.');else if(s.includes(','))s=s.replace(',','.');const n=Number(s);return Number.isFinite(n)?Math.abs(n):0;}
+function detectBank(text){const t=text.toLowerCase(),banks=[['Mercado Pago',/mercado\s*pago|mercadopago/],['Nubank',/nubank|nu pagamentos/],['Sicredi',/sicredi/],['Cresol',/cresol/],['Meu Tudo Consignado',/meu\s*tudo|meutudo/],['Infinity Pay',/infinity\s*pay|cloudwalk/],['Itaú',/ita[uú]/],['Bradesco',/bradesco/],['Santander',/santander/],['Banco do Brasil',/banco\s+do\s+brasil/],['Caixa',/caixa\s+econ[oô]mica/],['Inter',/banco\s+inter/],['C6 Bank',/c6\s*bank/],['PicPay',/picpay/]];return(banks.find(([,r])=>r.test(t))||['Banco não identificado'])[0];}
+function detectDebtType(text){const t=text.toLowerCase();if(/fatura|cart[aã]o|limite|fechamento/.test(t))return'credit_card';if(/consignad/.test(t))return'consigned';if(/financiamento/.test(t))return'financing';if(/empr[eé]stimo|cr[eé]dito pessoal|saldo devedor|parcelas restantes/.test(t))return'loan';return'other';}
+function extractDay(text,patterns){for(const rx of patterns){const m=text.match(rx);if(!m)continue;const raw=m[1]||'';const d=raw.match(/\b([0-3]?\d)[\/.-]/);const n=d?Number(d[1]):Number(raw.replace(/\D/g,''));if(n>=1&&n<=31)return n;}return null;}
+function extractMoneyCandidates(text){
+ const lines=text.split(/\n+/).map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean),out=[];
+ const rules=[['Valor para quitação',/valor\s+(?:para\s+)?quita[cç][aã]o|quita[cç][aã]o\s+hoje/i,100],['Saldo devedor',/saldo\s+devedor|saldo\s+da\s+d[ií]vida/i,96],['Total da fatura',/total\s+(?:da\s+)?fatura|valor\s+(?:total\s+)?da\s+fatura/i,92],['Total a pagar',/total\s+a\s+pagar|valor\s+a\s+pagar/i,88],['Fatura atual',/fatura\s+atual|fatura\s+fechada/i,82],['Saldo atual',/saldo\s+atual/i,78]];
+ const money=/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/g;
+ lines.forEach((line,i)=>{const ctx=[lines[i-1]||'',line,lines[i+1]||''].join(' ');let m;while((m=money.exec(line))){const amount=brMoneyToNumber(m[0]);if(amount<1)continue;let label='Valor encontrado',score=20;for(const[r,rx,s]of rules)if(rx.test(ctx)){label=r;score=s;break;}if(/pagamento\s+m[ií]nimo/i.test(ctx)){label='Pagamento mínimo';score=5;}if(/limite/i.test(ctx)){label='Limite';score=8;}out.push({amount,label,score,context:ctx});}});
+ const seen=new Set();return out.sort((a,b)=>b.score-a.score||b.amount-a.amount).filter(x=>{const k=x.amount.toFixed(2)+'|'+x.label;if(seen.has(k))return false;seen.add(k);return true;}).slice(0,15);
+}
+function extractLimit(text){const m=text.match(/limite(?:\s+total|\s+do\s+cart[aã]o)?[^\d]{0,40}(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/i);return m?brMoneyToNumber(m[1]):0;}
+async function extractPdfText(file){const bytes=new Uint8Array(await file.arrayBuffer()),pdf=await pdfjsLib.getDocument({data:bytes}).promise,pages=[];for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i),content=await page.getTextContent();pages.push(content.items.map(x=>x.str).join(' '));}return pages.join('\n');}
+function resetPdfImport(){els.pdfFileInput.value='';els.pdfReading.classList.add('hidden');els.pdfResult.classList.add('hidden');els.pdfExtractPreview.textContent='';}
+async function handlePdf(file){
+ if(!file)return;els.pdfReading.classList.remove('hidden');els.pdfResult.classList.add('hidden');
+ try{
+  const text=await extractPdfText(file);if(text.trim().length<30)throw new Error('Este PDF parece digitalizado como imagem. Esta versão lê PDFs com texto selecionável.');
+  const bank=detectBank(text),type=detectDebtType(text),candidates=extractMoneyCandidates(text),best=candidates.find(x=>x.score>=60)||candidates[0];
+  const due=extractDay(text,[/vencimento[^\n]{0,40}?(\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?)/i,/vence\s+(?:em|dia)?\s*(\d{1,2})/i]);
+  const close=extractDay(text,[/fechamento[^\n]{0,40}?(\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?)/i,/fecha\s+(?:em|dia)?\s*(\d{1,2})/i]);
+  els.pdfDetectedBank.textContent=bank;els.pdfBank.value=bank==='Banco não identificado'?'':bank;els.pdfType.value=type;els.pdfDetail.value=type==='credit_card'?'Cartão de crédito':'';
+  els.pdfAmountCandidates.innerHTML=candidates.length?candidates.map(x=>`<option value="${x.amount}">${esc(x.label)} — ${fmt.format(x.amount)}</option>`).join(''):'<option value="">Nenhum valor identificado</option>';
+  els.pdfAmount.value=best?.amount||'';if(best)els.pdfAmountCandidates.value=String(best.amount);els.pdfCardLimit.value=extractLimit(text)||'';els.pdfDueDay.value=due||'';els.pdfCloseDay.value=close||'';
+  els.pdfConfidenceText.textContent=best?.score>=80?'Boa confiança na leitura. Confira e salve.':'Confira o valor antes de salvar.';
+  els.pdfExtractPreview.textContent=`Arquivo: ${file.name}\nBanco: ${bank}\nTipo: ${accountTypeLabel(type)}\n\n${text.slice(0,5000)}`;els.pdfResult.classList.remove('hidden');
+ }catch(e){alert(e.message||'Não consegui ler o PDF.');}finally{els.pdfReading.classList.add('hidden');}
+}
+function savePdfAsAccount(){const name=els.pdfBank.value.trim(),original=Number(els.pdfAmount.value),type=els.pdfType.value||'other';if(!name||original<=0)return alert('Confira o banco e o valor.');const a={id:crypto.randomUUID?.()||String(Date.now()),name,detail:els.pdfDetail.value.trim()||accountTypeLabel(type),type,original,payments:[],source:'pdf',importedAt:Date.now()};if(type==='credit_card'){a.cardLimit=Number(els.pdfCardLimit.value)||0;a.cardDueDay=Number(els.pdfDueDay.value)||null;a.cardCloseDay=Number(els.pdfCloseDay.value)||null;}state.accounts.push(a);save();els.pdfImportDialog.close();resetPdfImport();}
+
 function render(){
  const t=totals();
  els.totalRemaining.textContent=fmt.format(t.remaining);
@@ -199,8 +237,9 @@ function render(){
      return `<div class="sub-account-row">
        <div class="sub-account-main">
          <div>
-           <strong>${esc(label)}</strong>
-           <small>Inicial: ${fmt.format(a.original)} • Pago: ${fmt.format(p)}</small>
+           <strong>${accountTypeIcon(a.type)} ${esc(label)}</strong>
+           <small><span class="type-badge">${esc(accountTypeLabel(a.type))}</span> Inicial: ${fmt.format(a.original)} • Pago: ${fmt.format(p)}</small>
+           ${a.type==='credit_card'?`<small class="card-meta">${a.cardLimit?`Limite: ${fmt.format(a.cardLimit)}`:''}${a.cardDueDay?`${a.cardLimit?' • ':''}Vence dia ${a.cardDueDay}`:''}${a.cardCloseDay?`${(a.cardLimit||a.cardDueDay)?' • ':''}Fecha dia ${a.cardCloseDay}`:''}</small>`:''}
          </div>
          <div class="sub-account-balance">
            <small>Restante</small>
@@ -263,6 +302,10 @@ function openCost(){els.costForm.reset();els.costDate.value=today();els.costDial
 els.fab.addEventListener('click',()=>currentView==='costs'?openCost():openPayment());
 $('#addCostBtn').addEventListener('click',openCost);
 $('#addAccountBtn').addEventListener('click',()=>openAccount());
+$('#importPdfBtn').addEventListener('click',()=>{resetPdfImport();els.pdfImportDialog.showModal();});
+els.pdfFileInput.addEventListener('change',e=>handlePdf(e.target.files?.[0]));
+els.pdfAmountCandidates.addEventListener('change',()=>{if(els.pdfAmountCandidates.value)els.pdfAmount.value=els.pdfAmountCandidates.value;});
+$('#savePdfImportBtn').addEventListener('click',savePdfAsAccount);
 $('#backupBtn').addEventListener('click',()=>els.backupDialog.showModal());
 els.monthFilter.addEventListener('change',renderCosts);
 $$('.nav-btn').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
@@ -281,7 +324,8 @@ els.paymentForm.addEventListener('submit',e=>{
  a.payments.push({id:crypto.randomUUID?.()||String(Date.now()),amount,date:els.paymentDate.value,note:els.paymentNote.value.trim(),createdAt:Date.now()});save();els.paymentDialog.close();
 });
 els.accountCreditor?.addEventListener('change',()=>{const creditor=els.accountCreditor.value;els.accountName.disabled=!!creditor;$('#accountNameLabel').classList.toggle('hidden',!!creditor);if(creditor)els.accountName.value=creditor;else els.accountName.value='';});
-els.accountForm.addEventListener('submit',e=>{e.preventDefault();const creditor=els.accountCreditor.value;const name=(creditor||els.accountName.value).trim(),detail=els.accountDetail.value.trim(),original=Number(els.accountAmount.value);if(!name||original<=0)return;state.accounts.push({id:crypto.randomUUID?.()||String(Date.now()),name,detail,original,payments:[]});save();els.accountDialog.close();});
+els.accountType?.addEventListener('change',toggleAccountTypeFields);
+els.accountForm.addEventListener('submit',e=>{e.preventDefault();const creditor=els.accountCreditor.value,name=(creditor||els.accountName.value).trim(),detail=els.accountDetail.value.trim(),type=els.accountType?.value||'other',original=Number(els.accountAmount.value);if(!name||original<=0)return;const a={id:crypto.randomUUID?.()||String(Date.now()),name,detail,type,original,payments:[]};if(type==='credit_card'){a.cardLimit=Number(els.cardLimit.value)||0;a.cardDueDay=Number(els.cardDueDay.value)||null;a.cardCloseDay=Number(els.cardCloseDay.value)||null;}state.accounts.push(a);save();els.accountDialog.close();});
 els.costForm.addEventListener('submit',e=>{e.preventDefault();const amount=Number(els.costAmount.value),place=els.costPlace.value.trim();if(amount<=0||!place)return;state.costs.push({id:crypto.randomUUID?.()||String(Date.now()),amount,category:els.costCategory.value,place,date:els.costDate.value,note:els.costNote.value.trim(),createdAt:Date.now()});els.monthFilter.value=els.costDate.value.slice(0,7);save();els.costDialog.close();});
 $('#clearPaymentsBtn').addEventListener('click',()=>{if(confirm('Limpar todos os pagamentos lançados?')){state.accounts.forEach(a=>a.payments=[]);save();}});
 $('#exportBtn').addEventListener('click',()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`minhas-contas-backup-${today()}.json`;a.click();URL.revokeObjectURL(url);});
