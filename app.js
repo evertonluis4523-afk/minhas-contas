@@ -148,7 +148,7 @@ els.loginForm.addEventListener('submit',async e=>{
    els.loginSubmit.disabled=true; els.loginSubmit.textContent='Entrando...';
    await signInWithEmailAndPassword(auth,email,pass);
  }catch(err){
-   showLogin('E-mail ou senha incorretos, ou acesso ainda não criado.');
+   showLogin(err?.code==='auth/unauthorized-domain'?'Domínio do GitHub Pages ainda não autorizado no Firebase.':'E-mail ou senha incorretos, ou acesso ainda não criado.');
  }finally{
    els.loginSubmit.disabled=false; els.loginSubmit.textContent='Entrar';
  }
@@ -280,7 +280,7 @@ els.paymentForm.addEventListener('submit',e=>{
  const r=remaining(a);if(amount>r+.001&&!confirm(`O pagamento é maior que o saldo restante (${fmt.format(r)}). Registrar mesmo assim?`))return;
  a.payments.push({id:crypto.randomUUID?.()||String(Date.now()),amount,date:els.paymentDate.value,note:els.paymentNote.value.trim(),createdAt:Date.now()});save();els.paymentDialog.close();
 });
-els.accountCreditor.addEventListener('change',()=>{const creditor=els.accountCreditor.value;els.accountName.disabled=!!creditor;$('#accountNameLabel').classList.toggle('hidden',!!creditor);if(creditor)els.accountName.value=creditor;else els.accountName.value='';});
+els.accountCreditor?.addEventListener('change',()=>{const creditor=els.accountCreditor.value;els.accountName.disabled=!!creditor;$('#accountNameLabel').classList.toggle('hidden',!!creditor);if(creditor)els.accountName.value=creditor;else els.accountName.value='';});
 els.accountForm.addEventListener('submit',e=>{e.preventDefault();const creditor=els.accountCreditor.value;const name=(creditor||els.accountName.value).trim(),detail=els.accountDetail.value.trim(),original=Number(els.accountAmount.value);if(!name||original<=0)return;state.accounts.push({id:crypto.randomUUID?.()||String(Date.now()),name,detail,original,payments:[]});save();els.accountDialog.close();});
 els.costForm.addEventListener('submit',e=>{e.preventDefault();const amount=Number(els.costAmount.value),place=els.costPlace.value.trim();if(amount<=0||!place)return;state.costs.push({id:crypto.randomUUID?.()||String(Date.now()),amount,category:els.costCategory.value,place,date:els.costDate.value,note:els.costNote.value.trim(),createdAt:Date.now()});els.monthFilter.value=els.costDate.value.slice(0,7);save();els.costDialog.close();});
 $('#clearPaymentsBtn').addEventListener('click',()=>{if(confirm('Limpar todos os pagamentos lançados?')){state.accounts.forEach(a=>a.payments=[]);save();}});

@@ -132,7 +132,13 @@
   <dialog id="accountDialog" class="modal">
     <form id="accountForm" method="dialog" class="modal-card">
       <div class="modal-head"><div><span class="eyebrow dark">CADASTRO</span><h3>Adicionar conta</h3></div><button type="button" class="close-btn" data-close="accountDialog">×</button></div>
-      <label>Nome<input id="accountName" type="text" maxlength="40" required placeholder="Ex.: Banco X" /></label>
+      <label>Banco / Credor
+        <select id="accountCreditor">
+          <option value="">Novo banco / credor</option>
+        </select>
+      </label>
+      <label id="accountNameLabel">Nome do banco / credor<input id="accountName" type="text" maxlength="40" required placeholder="Ex.: Banco X" /></label>
+      <label>Nome da conta / contrato<input id="accountDetail" type="text" maxlength="50" placeholder="Ex.: Cartão, Empréstimo, Parcela 01" /></label>
       <label>Valor inicial<input id="accountAmount" type="number" min="0.01" step="0.01" inputmode="decimal" required placeholder="0,00" /></label>
       <div class="modal-actions"><button type="button" class="ghost-btn" data-close="accountDialog">Cancelar</button><button type="submit" class="primary-btn">Adicionar</button></div>
     </form>
