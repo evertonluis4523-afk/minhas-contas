@@ -14,9 +14,6 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const db = getDatabase(firebaseApp);
-let currentUser=null;
-function userDataPath(){if(!currentUser?.uid)throw new Error('Usuário não autenticado');return `rm_contas_usuarios/${currentUser.uid}`;}
-
 let currentUser = null;
 let cloudReady = false;
 let unsubscribeData = null;
@@ -44,50 +41,65 @@ const els={
  debtsView:$('#debtsView'),costsView:$('#costsView'),backupDialog:$('#backupDialog'),pdfImportDialog:$('#pdfImportDialog'),pdfFileInput:$('#pdfFileInput'),pdfReading:$('#pdfReading'),pdfResult:$('#pdfResult'),pdfDocumentType:$('#pdfDocumentType'),pdfImportTotal:$('#pdfImportTotal'),pdfImportNotice:$('#pdfImportNotice'),pdfItemCount:$('#pdfItemCount'),pdfItemsList:$('#pdfItemsList'),pdfExtractPreview:$('#pdfExtractPreview'),fab:$('#fab')
 };
 
-let state=loadState();
+let state=blankState();
 let currentView='debts';
 
+function blankState(){ return {accounts:[],costs:[]}; }
+function userStorageKey(uid){ return `${STORAGE_KEY}:${uid}`; }
 function loadState(){
+ // Antes do login não carregamos dados financeiros de nenhum usuário.
+ return blankState();
+}
+function loadLocalForUser(uid){
  try{
-   const raw=localStorage.getItem(STORAGE_KEY);
-   if(raw){const x=JSON.parse(raw); x.costs ||= []; return x;}
-   for(const key of LEGACY_KEYS){
-     const old=localStorage.getItem(key);
-     if(old){const x=JSON.parse(old); x.costs ||= []; localStorage.setItem(STORAGE_KEY,JSON.stringify(x)); return x;}
-   }
- }catch{}
- return {accounts:INITIAL_ACCOUNTS,costs:[]};
+   const raw=localStorage.getItem(userStorageKey(uid));
+   if(!raw)return null;
+   const x=JSON.parse(raw);
+   x.accounts ||= [];
+   x.accounts.forEach(a=>a.payments ||= []);
+   x.costs ||= [];
+   return x;
+ }catch{return null;}
 }
 function saveLocal(){
- localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+ if(!currentUser?.uid)return;
+ localStorage.setItem(userStorageKey(currentUser.uid),JSON.stringify(state));
 }
 async function save(){
  saveLocal();
  render();
  if(currentUser && cloudReady){
    try{await set(ref(db,`users/${currentUser.uid}/finance`),state);}
-   catch(err){console.error('Falha ao sincronizar com Firebase',err);}
+   catch(err){console.error('Falha ao sincronizar com Firebase',err);throw err;}
  }
 }
 async function startCloudSync(user){
  currentUser=user;
+ cloudReady=false;
  const financeRef=ref(db,`users/${user.uid}/finance`);
  const snap=await get(financeRef);
+
  if(snap.exists()){
    const cloud=snap.val();
    cloud.accounts ||= [];
+   cloud.accounts.forEach(a=>a.payments ||= []);
    cloud.costs ||= [];
    state=cloud;
-   saveLocal();
  }else{
+   // Usuário novo começa vazio. Nunca copiamos o estado local de outro usuário.
+   state=loadLocalForUser(user.uid) || blankState();
    await set(financeRef,state);
  }
+
+ saveLocal();
  cloudReady=true;
+
  if(unsubscribeData) unsubscribeData();
  unsubscribeData=onValue(financeRef,snapshot=>{
-   if(!snapshot.exists()) return;
+   if(!snapshot.exists())return;
    const next=snapshot.val();
    next.accounts ||= [];
+   next.accounts.forEach(a=>a.payments ||= []);
    next.costs ||= [];
    state=next;
    saveLocal();
@@ -637,6 +649,8 @@ onAuthStateChanged(auth,async user=>{
   }else{
     currentUser=null; cloudReady=false;
     if(unsubscribeData){unsubscribeData();unsubscribeData=null;}
+    state=blankState();
+    render();
     showLogin();
   }
 });
@@ -645,6 +659,27 @@ render();
 /* MULTIUSUARIO */
 const createAccountBtn=document.querySelector('#createAccountBtn'),forgotPasswordBtn=document.querySelector('#forgotPasswordBtn'),createAccountDialog=document.querySelector('#createAccountDialog'),createAccountForm=document.querySelector('#createAccountForm');
 createAccountBtn?.addEventListener('click',()=>createAccountDialog.showModal());
-createAccountForm?.addEventListener('submit',async e=>{e.preventDefault();const email=document.querySelector('#newUserEmail').value.trim(),p1=document.querySelector('#newUserPassword').value,p2=document.querySelector('#newUserPassword2').value;if(p1!==p2)return alert('As senhas não conferem.');try{const c=await createUserWithEmailAndPassword(auth,email,p1);currentUser=c.user;createAccountDialog.close();createAccountForm.reset();alert('Conta criada com sucesso.');}catch(err){alert(err.code==='auth/email-already-in-use'?'Este e-mail já possui conta.':'Não foi possível criar a conta.');}});
+createAccountForm?.addEventListener('submit',async e=>{
+ e.preventDefault();
+ const email=document.querySelector('#newUserEmail').value.trim();
+ const p1=document.querySelector('#newUserPassword').value;
+ const p2=document.querySelector('#newUserPassword2').value;
+ if(p1!==p2)return alert('As senhas não conferem.');
+ if(p1.length<6)return alert('A senha precisa ter pelo menos 6 caracteres.');
+ try{
+   await createUserWithEmailAndPassword(auth,email,p1);
+   createAccountDialog.close();
+   createAccountForm.reset();
+   // Firebase faz login automaticamente; onAuthStateChanged abre o app e cria banco vazio.
+ }catch(err){
+   const msg={
+    'auth/email-already-in-use':'Este e-mail já possui uma conta.',
+    'auth/invalid-email':'Informe um e-mail válido.',
+    'auth/weak-password':'A senha precisa ter pelo menos 6 caracteres.',
+    'auth/operation-not-allowed':'Ative Email/Senha no Firebase Authentication.'
+   }[err.code] || `Não foi possível criar a conta (${err.code||'erro'}).`;
+   alert(msg);
+ }
+});
 forgotPasswordBtn?.addEventListener('click',async()=>{const email=(document.querySelector('#loginEmail')?.value||document.querySelector('input[type="email"]')?.value||'').trim();if(!email)return alert('Digite seu e-mail primeiro.');try{await sendPasswordResetEmail(auth,email);alert('E-mail de recuperação enviado.');}catch(e){alert('Confira o e-mail informado.');}});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-close]');if(b)document.getElementById(b.dataset.close)?.close();});
