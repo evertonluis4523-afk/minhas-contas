@@ -26,7 +26,7 @@
         <label>Senha
           <input id="loginPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="••••••" />
         </label>
-        <button id="loginSubmit" class="primary-btn full" type="submit">Entrar</button>
+        <button id="loginSubmit" class="primary-btn full" type="submit">Entrar</button><div class="login-secondary-actions"><button type="button" id="createAccountBtn" class="ghost-btn">Criar minha conta</button><button type="button" id="forgotPasswordBtn" class="text-btn">Esqueci minha senha</button></div>
       </form>
       <button id="registerBtn" class="text-btn" type="button">Criar primeiro acesso</button>
       <button id="resetPasswordBtn" class="text-btn" type="button">Esqueci minha senha</button>
@@ -119,7 +119,7 @@
   </div>
 
   <dialog id="paymentDialog" class="modal">
-    <form id="paymentForm" class="modal-card">
+    <form id="paymentForm" method="dialog" class="modal-card">
       <div class="modal-head"><div><span class="eyebrow dark">NOVO LANÇAMENTO</span><h3>Registrar pagamento</h3></div><button type="button" class="close-btn" data-close="paymentDialog">×</button></div>
       <label>Conta<select id="paymentAccount" required></select></label>
       <label>Valor pago<input id="paymentAmount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0,00" required /></label>
@@ -232,5 +232,5 @@
     }
   </script>
   <script type="module" src="./app.js"></script>
-</body>
+<dialog id="createAccountDialog" class="modal"><form id="createAccountForm" class="modal-card"><div class="modal-head"><div><span class="eyebrow dark">NOVO USUÁRIO</span><h3>Criar minha conta</h3></div><button type="button" class="close-btn" data-close="createAccountDialog">×</button></div><label>E-mail<input id="newUserEmail" type="email" required></label><label>Senha<input id="newUserPassword" type="password" minlength="6" required></label><label>Confirmar senha<input id="newUserPassword2" type="password" minlength="6" required></label><p class="field-note">Seus dados ficam separados dos demais usuários.</p><div class="modal-actions"><button type="button" class="ghost-btn" data-close="createAccountDialog">Cancelar</button><button type="submit" class="primary-btn">Criar conta</button></div></form></dialog></body>
 </html>

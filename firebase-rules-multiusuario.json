@@ -1,0 +1,1 @@
+{"rules":{"rm_contas_usuarios":{"$uid":{".read":"auth != null && auth.uid === $uid",".write":"auth != null && auth.uid === $uid"}}}}

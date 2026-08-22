@@ -65,3 +65,4 @@
  .pdf-import-item>b{grid-column:3;text-align:left}
  .import-detected{align-items:flex-start}
 }
+.login-secondary-actions{display:grid;gap:8px;margin-top:10px}.login-secondary-actions .ghost-btn{width:100%}.text-btn{border:0;background:transparent;color:var(--purple,#5b2bd9);font-weight:800;padding:8px}

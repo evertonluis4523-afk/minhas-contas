@@ -1,0 +1,7 @@
+ATUALIZAÇÃO MULTIUSUÁRIO
+
+Substitua index.html, app.js, styles.css e sw.js no GitHub.
+No Firebase Authentication, ative E-mail/Senha.
+Nas regras atuais do Realtime Database, ACRESCENTE o bloco rm_contas_usuarios do arquivo firebase-rules-multiusuario.json; não apague as regras dos outros sistemas RM.
+Cada usuário ficará em /rm_contas_usuarios/UID.
+IMPORTANTE: faça backup dos dados antigos antes de migrar.

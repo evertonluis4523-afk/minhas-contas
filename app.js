@@ -14,6 +14,9 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const db = getDatabase(firebaseApp);
+let currentUser=null;
+function userDataPath(){if(!currentUser?.uid)throw new Error('Usuário não autenticado');return `rm_contas_usuarios/${currentUser.uid}`;}
+
 let currentUser = null;
 let cloudReady = false;
 let unsubscribeData = null;
@@ -47,10 +50,10 @@ let currentView='debts';
 function loadState(){
  try{
    const raw=localStorage.getItem(STORAGE_KEY);
-   if(raw){const x=JSON.parse(raw); x.costs ||= []; x.accounts ||= []; x.accounts.forEach(a=>a.payments ||= []); return x;}
+   if(raw){const x=JSON.parse(raw); x.costs ||= []; return x;}
    for(const key of LEGACY_KEYS){
      const old=localStorage.getItem(key);
-     if(old){const x=JSON.parse(old); x.costs ||= []; x.accounts ||= []; x.accounts.forEach(a=>a.payments ||= []); localStorage.setItem(STORAGE_KEY,JSON.stringify(x)); return x;}
+     if(old){const x=JSON.parse(old); x.costs ||= []; localStorage.setItem(STORAGE_KEY,JSON.stringify(x)); return x;}
    }
  }catch{}
  return {accounts:INITIAL_ACCOUNTS,costs:[]};
@@ -73,7 +76,6 @@ async function startCloudSync(user){
  if(snap.exists()){
    const cloud=snap.val();
    cloud.accounts ||= [];
-   cloud.accounts.forEach(a=>a.payments ||= []);
    cloud.costs ||= [];
    state=cloud;
    saveLocal();
@@ -86,7 +88,6 @@ async function startCloudSync(user){
    if(!snapshot.exists()) return;
    const next=snapshot.val();
    next.accounts ||= [];
-   next.accounts.forEach(a=>a.payments ||= []);
    next.costs ||= [];
    state=next;
    saveLocal();
@@ -608,27 +609,10 @@ document.addEventListener('click',e=>{
  const delPay=e.target.closest('[data-delete-payment]');if(delPay){const[aid,pid]=delPay.dataset.deletePayment.split('|');const a=state.accounts.find(x=>x.id===aid);if(a&&confirm('Excluir este pagamento?')){a.payments=a.payments.filter(p=>p.id!==pid);save();}}
  const delCost=e.target.closest('[data-delete-cost]');if(delCost&&confirm('Excluir este gasto?')){state.costs=state.costs.filter(c=>c.id!==delCost.dataset.deleteCost);save();}
 });
-els.paymentForm.addEventListener('submit',async e=>{
- e.preventDefault();
- e.stopPropagation();
- const accountId=els.paymentAccount.value;
- const a=state.accounts.find(x=>String(x.id)===String(accountId));
- const amount=Number(String(els.paymentAmount.value).replace(',','.'));
- if(!a){alert('Não foi possível localizar a conta selecionada. Feche esta tela e tente novamente.');return;}
- if(!Number.isFinite(amount)||amount<=0){alert('Informe um valor de pagamento válido.');return;}
- if(!els.paymentDate.value){alert('Informe a data do pagamento.');return;}
- a.payments ||= [];
- const r=remaining(a);
- if(amount>r+.001&&!confirm(`O pagamento é maior que o saldo restante (${fmt.format(r)}). Registrar mesmo assim?`))return;
- const payment={id:crypto.randomUUID?.()||String(Date.now()),amount,date:els.paymentDate.value,note:els.paymentNote.value.trim(),createdAt:Date.now()};
- a.payments.push(payment);
- try{
-   await save();
-   els.paymentDialog.close();
- }catch(err){
-   console.error('Erro ao salvar pagamento',err);
-   alert('O pagamento foi salvo neste aparelho, mas houve falha na sincronização. Tente novamente com internet.');
- }
+els.paymentForm.addEventListener('submit',e=>{
+ e.preventDefault();const a=state.accounts.find(x=>x.id===els.paymentAccount.value),amount=Number(els.paymentAmount.value);if(!a||amount<=0)return;
+ const r=remaining(a);if(amount>r+.001&&!confirm(`O pagamento é maior que o saldo restante (${fmt.format(r)}). Registrar mesmo assim?`))return;
+ a.payments.push({id:crypto.randomUUID?.()||String(Date.now()),amount,date:els.paymentDate.value,note:els.paymentNote.value.trim(),createdAt:Date.now()});save();els.paymentDialog.close();
 });
 els.accountCreditor?.addEventListener('change',()=>{const creditor=els.accountCreditor.value;els.accountName.disabled=!!creditor;$('#accountNameLabel').classList.toggle('hidden',!!creditor);if(creditor)els.accountName.value=creditor;else els.accountName.value='';});
 els.accountType?.addEventListener('change',toggleAccountTypeFields);
@@ -657,3 +641,10 @@ onAuthStateChanged(auth,async user=>{
   }
 });
 render();
+
+/* MULTIUSUARIO */
+const createAccountBtn=document.querySelector('#createAccountBtn'),forgotPasswordBtn=document.querySelector('#forgotPasswordBtn'),createAccountDialog=document.querySelector('#createAccountDialog'),createAccountForm=document.querySelector('#createAccountForm');
+createAccountBtn?.addEventListener('click',()=>createAccountDialog.showModal());
+createAccountForm?.addEventListener('submit',async e=>{e.preventDefault();const email=document.querySelector('#newUserEmail').value.trim(),p1=document.querySelector('#newUserPassword').value,p2=document.querySelector('#newUserPassword2').value;if(p1!==p2)return alert('As senhas não conferem.');try{const c=await createUserWithEmailAndPassword(auth,email,p1);currentUser=c.user;createAccountDialog.close();createAccountForm.reset();alert('Conta criada com sucesso.');}catch(err){alert(err.code==='auth/email-already-in-use'?'Este e-mail já possui conta.':'Não foi possível criar a conta.');}});
+forgotPasswordBtn?.addEventListener('click',async()=>{const email=(document.querySelector('#loginEmail')?.value||document.querySelector('input[type="email"]')?.value||'').trim();if(!email)return alert('Digite seu e-mail primeiro.');try{await sendPasswordResetEmail(auth,email);alert('E-mail de recuperação enviado.');}catch(e){alert('Confira o e-mail informado.');}});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-close]');if(b)document.getElementById(b.dataset.close)?.close();});
