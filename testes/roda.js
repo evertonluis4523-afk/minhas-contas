@@ -432,6 +432,26 @@ teste('login-com-foto-e-conta-lembrada', async (b, t) => {
   await ctx2.close(); await ctx.close();
 });
 
+teste('sem-clique-duplo', async (b, t) => {
+  // pedido: "tire o clique duplo" -- dois toques rápidos davam zoom na tela
+  // do telefone e selecionavam texto. touch-action: manipulation tira o zoom
+  // do toque duplo (a pinça continua); os campos seguem selecionáveis.
+  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', hasTouch: true, isMobile: true });
+  const pg = await ctx.newPage();
+  await pg.addInitScript(o => { window.__fb = { user: { uid: 'u1', email: 'fulano.exemplo@email.com' }, db: { users: { u1: { finance: o.dados } } }, ouvintes: {}, escritas: [] }; }, { dados: DADOS() });
+  await rotas(pg); await pg.goto('http://app.local/index.html'); await pg.waitForTimeout(600);
+  const r = await pg.evaluate(() => {
+    const ta = el => el ? getComputedStyle(el).touchAction : '';
+    const sel = el => el ? getComputedStyle(el).userSelect || getComputedStyle(el).webkitUserSelect : '';
+    const bt = document.querySelector('.nav-btn') || document.querySelector('button');
+    const inp = document.querySelector('input');
+    return { html: ta(document.documentElement), body: ta(document.body), bt: ta(bt), selBody: sel(document.body), selInp: sel(inp) };
+  });
+  t.ok('toque duplo não dá zoom: página e botões em "manipulation"', r.html === 'manipulation' && r.body === 'manipulation' && r.bt === 'manipulation', JSON.stringify(r));
+  t.ok('toque duplo não seleciona palavra, mas os campos continuam selecionáveis', r.selBody === 'none' && r.selInp !== 'none', JSON.stringify(r));
+  await ctx.close();
+});
+
 /* ---------- execução ---------- */
 (async () => {
   const b = await chromium.launch();

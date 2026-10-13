@@ -14,6 +14,13 @@
 }}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{background:var(--fundo)}
+/* Sem clique duplo: dois toques rapidos (no +, no voltar, num cartao) davam
+   zoom na tela e selecionavam palavra. "manipulation" deixa o toque ser so'
+   toque -- a pinca para ampliar continua valendo. Os campos seguem
+   selecionaveis para corrigir o que se digita. */
+html,body,button,a,label,input,select,textarea,[role=button]{touch-action:manipulation}
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:text}
 body{margin:0;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--tinta);-webkit-font-smoothing:antialiased}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
