@@ -31,18 +31,18 @@ const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const els={
  loginScreen:$('#loginScreen'),app:$('#app'),loginForm:$('#loginForm'),loginEmail:$('#loginEmail'),loginPassword:$('#loginPassword'),loginHelp:$('#loginHelp'),loginSubmit:$('#loginSubmit'),
- pageTitle:$('#pageTitle'),pageSubtitle:$('#pageSubtitle'),debtSummary:$('#debtSummary'),costSummary:$('#costSummary'),
+ 
  totalRemaining:$('#totalRemaining'),totalOriginal:$('#totalOriginal'),totalPaid:$('#totalPaid'),paidPercent:$('#paidPercent'),
  accountCount:$('#accountCount'),accountsList:$('#accountsList'),paymentsList:$('#paymentsList'),
  paymentDialog:$('#paymentDialog'),paymentForm:$('#paymentForm'),paymentAccount:$('#paymentAccount'),paymentAmount:$('#paymentAmount'),paymentDate:$('#paymentDate'),paymentNote:$('#paymentNote'),
  accountDialog:$('#accountDialog'),accountForm:$('#accountForm'),accountCreditor:$('#accountCreditor'),accountName:$('#accountName'),accountDetail:$('#accountDetail'),accountType:$('#accountType'),accountAmount:$('#accountAmount'),creditCardFields:$('#creditCardFields'),cardLimit:$('#cardLimit'),cardDueDay:$('#cardDueDay'),cardCloseDay:$('#cardCloseDay'),
  costDialog:$('#costDialog'),costForm:$('#costForm'),costAmount:$('#costAmount'),costCategory:$('#costCategory'),costPlace:$('#costPlace'),costDate:$('#costDate'),costNote:$('#costNote'),
  monthFilter:$('#monthFilter'),monthSpent:$('#monthSpent'),monthCount:$('#monthCount'),monthName:$('#monthName'),categorySummary:$('#categorySummary'),costsList:$('#costsList'),costCount:$('#costCount'),
- debtsView:$('#debtsView'),dueList:$('#dueList'),payoffForecast:$('#payoffForecast'),paidOffList:$('#paidOffList'),monthCompare:$('#monthCompare'),undoToast:$('#undoToast'),accountDueDay:$('#accountDueDay'),accountInstallment:$('#accountInstallment'),costsView:$('#costsView'),backupDialog:$('#backupDialog'),pdfImportDialog:$('#pdfImportDialog'),pdfFileInput:$('#pdfFileInput'),pdfReading:$('#pdfReading'),pdfResult:$('#pdfResult'),pdfDocumentType:$('#pdfDocumentType'),pdfImportTotal:$('#pdfImportTotal'),pdfImportNotice:$('#pdfImportNotice'),pdfItemCount:$('#pdfItemCount'),pdfItemsList:$('#pdfItemsList'),pdfExtractPreview:$('#pdfExtractPreview'),fab:$('#fab')
+ debtsView:$('#debtsView'),accountSheet:$('#accountSheet'),dueList:$('#dueList'),payoffForecast:$('#payoffForecast'),paidOffList:$('#paidOffList'),monthCompare:$('#monthCompare'),undoToast:$('#undoToast'),accountDueDay:$('#accountDueDay'),accountInstallment:$('#accountInstallment'),costsView:$('#costsView'),backupDialog:$('#backupDialog'),pdfImportDialog:$('#pdfImportDialog'),pdfFileInput:$('#pdfFileInput'),pdfReading:$('#pdfReading'),pdfResult:$('#pdfResult'),pdfDocumentType:$('#pdfDocumentType'),pdfImportTotal:$('#pdfImportTotal'),pdfImportNotice:$('#pdfImportNotice'),pdfItemCount:$('#pdfItemCount'),pdfItemsList:$('#pdfItemsList'),pdfExtractPreview:$('#pdfExtractPreview'),fab:$('#fab')
 };
 
 let state=blankState();
-let currentView='debts';
+let currentView='home';
 
 function blankState(){ return {accounts:[],costs:[],budgets:{},categories:[]}; }
 function userStorageKey(uid){ return `${STORAGE_KEY}:${uid}`; }
@@ -599,6 +599,27 @@ async function savePdfImport(){
  resetPdfImport();
  alert(`Importação concluída: ${created} criada(s) e ${updated} atualizada(s).`);
 }
+function linhaPagamento(p,naConta){
+ const tit=naConta?dateBR(p.date):esc(p.accountName||''), sub=naConta?esc(p.note||''):`${dateBR(p.date)}${p.note?' • '+esc(p.note):''}`;
+ return `<div class="payment-row"><div class="payment-meta"><strong>${tit}</strong>${sub?`<small>${sub}</small>`:''}</div><div class="payment-value"><strong>-${fmt.format(p.amount)}</strong><span class="row-actions"><button type="button" data-edit-payment="${p.accountId}|${p.id}">Editar</button><button type="button" data-delete-payment="${p.accountId}|${p.id}">Excluir</button></span></div></div>`;
+}
+/* FOLHA DA CONTA: o que antes ficava espalhado no cartão (pagar, editar,
+   excluir, histórico) abre aqui, ao tocar na linha da conta. */
+let sheetId=null, debtFilter='open';
+function renderSheet(id){
+ const a=state.accounts.find(x=>x.id===id); if(!a){els.accountSheet.close();return;}
+ const p=paid(a),r=remaining(a),vi=vencInfo(a),tv=vi?textoVenc(vi,a):null;
+ const meta=[];if(diaVenc(a))meta.push(`vence dia ${diaVenc(a)}`);if(a.installment)meta.push(`parcela ${fmt.format(a.installment)}`);if(a.type==='credit_card'&&a.cardLimit)meta.push(`limite ${fmt.format(a.cardLimit)}`);
+ const pags=(a.payments||[]).map(x=>({...x,accountId:a.id})).sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+ $('#accountSheetBody').innerHTML=`<div class="sheet-handle"></div><div class="modal-head"><div><span class="eyebrow dark">${esc(accountTypeLabel(a.type))}</span><h3>${esc(a.name)}${a.detail?' · '+esc(a.detail):''}</h3></div><button type="button" class="close-btn" data-close="accountSheet">×</button></div>
+  <div class="sheet-sum"><div><small>Falta</small><b>${fmt.format(r)}</b></div><div><small>Pago</small><b>${fmt.format(p)}</b></div><div><small>Original</small><b>${fmt.format(a.original)}</b></div></div>
+  ${tv||meta.length?`<p class="sheet-meta">${tv?`<span class="${tv.cls}">${tv.txt}</span>${meta.length?' · ':''}`:''}${meta.join(' · ')}</p>`:''}
+  <div class="sheet-acts"><button type="button" class="primary-btn" data-pay="${a.id}">Registrar pagamento</button><button type="button" class="ghost-btn" data-edit-account="${a.id}">Editar</button></div>
+  <div class="block-head"><b>Pagamentos</b><span>${pags.length}</span></div>
+  <div class="list">${pags.length?pags.map(x=>linhaPagamento(x,true)).join(''):'<div class="empty">Nenhum pagamento ainda.</div>'}</div>
+  <button type="button" class="link-btn danger del-acc" data-delete-account="${a.id}">Excluir esta conta e o histórico</button>`;
+}
+function openSheet(id){sheetId=id;renderSheet(id);if(!els.accountSheet.open)els.accountSheet.showModal();}
 function render(){
  const t=totals();
  els.totalRemaining.textContent=fmt.format(t.remaining);
@@ -616,59 +637,54 @@ function render(){
  }));
  els.paidOffList.innerHTML=quitadas.length?`<details class="paid-off"><summary>✓ Quitadas (${quitadas.length}) · ${esc([...new Set(quitadas.map(a=>a.name))].join(', '))}</summary>
    ${quitadas.map(a=>`<div class="paid-off-row"><span>${accountTypeIcon(a.type)} <b>${esc(accountDisplay(a))}</b><small>${fmt.format(a.original)} · ${(a.payments||[]).length} pagamentos</small></span><span><button class="link-btn" data-edit-account="${a.id}">Editar</button><button class="link-btn danger" data-delete-account="${a.id}">Excluir</button></span></div>`).join('')}</details>`:'';
- els.accountCount.textContent=`${groups.length} ${groups.length===1?'credor':'credores'}`;
-
+ els.accountCount.textContent=`${groups.length} ${groups.length===1?'credor':'credores'} · ${ativas.length} ${ativas.length===1?'conta':'contas'}`;
  els.paymentAccount.innerHTML=state.accounts.map(a=>`<option value="${a.id}">${esc(accountDisplay(a))} — ${fmt.format(remaining(a))}</option>`).join('');
 
- els.accountsList.innerHTML=groups.length?groups.map(g=>{
-   const original=g.accounts.reduce((s,a)=>s+Number(a.original),0);
-   const totalPaid=g.accounts.reduce((s,a)=>s+paid(a),0);
-   const totalRemaining=Math.max(0,original-totalPaid);
-   const pctGrupo=original?Math.min(100,totalPaid/original*100):0;
+ // ----- Início -----
+ const hb=$('#heroBar'); if(hb)hb.style.width=`${t.original?Math.min(100,t.totalPaid/t.original*100):0}%`;
+ const hr=new Date().getHours(); const g=$('#greeting'); if(g)g.textContent=hr<12?'Bom dia':hr<18?'Boa tarde':'Boa noite';
+ const mes=currentMonth(), custosMes=(state.costs||[]).filter(c=>c.date?.startsWith(mes)), totMes=custosMes.reduce((s,c)=>s+Number(c.amount||0),0);
+ const pagMes=state.accounts.flatMap(a=>a.payments||[]).filter(p=>p.date?.startsWith(mes));
+ const setTxt=(id,v)=>{const e=$(id);if(e)e.textContent=v;};
+ setTxt('#homeMonthName',monthLabel(mes).replace(/ de \d{4}$/,''));
+ setTxt('#homeSpent',fmt.format(totMes));
+ setTxt('#homePaid',fmt.format(pagMes.reduce((s,p)=>s+Number(p.amount||0),0)));
+ setTxt('#homePaidCount',`${pagMes.length} ${pagMes.length===1?'pagamento':'pagamentos'}`);
+ setTxt('#whoEmail',currentUser?.email||'');
 
-   const accountRows=g.accounts.map((a,i)=>{
-     const p=paid(a),r=remaining(a),apct=a.original?Math.min(100,p/a.original*100):0;
-     const label=a.detail || (g.accounts.length===1 ? 'Conta principal' : `Conta ${i+1}`);
-     return `<div class="sub-account-row">
-       <div class="sub-account-main">
-         <div>
-           <strong>${accountTypeIcon(a.type)} ${esc(label)}</strong>
-           <small><span class="type-badge">${esc(accountTypeLabel(a.type))}</span> Inicial: ${fmt.format(a.original)} • Pago: ${fmt.format(p)}</small>
-           ${(()=>{const m=[];if(a.type==='credit_card'&&a.cardLimit)m.push(`Limite: ${fmt.format(a.cardLimit)}`);if(diaVenc(a))m.push(`Vence dia ${diaVenc(a)}`);if(a.type==='credit_card'&&a.cardCloseDay)m.push(`Fecha dia ${a.cardCloseDay}`);if(a.installment)m.push(`Parcela ${fmt.format(a.installment)} · faltam ${parcelasFaltam(a)}`);return m.length?`<small class="card-meta">${m.join(' • ')}</small>`:'';})()}
-         </div>
-         <div class="sub-account-balance">
-           <small>Restante</small>
-           <strong>${fmt.format(r)}</strong>
-         </div>
-       </div>
-       <div class="progress mini-progress"><span style="width:${apct}%"></span></div>
-       <div class="sub-account-actions">
-         <button class="mini-btn" data-pay="${a.id}">+ Pagamento</button>
-         <button class="link-btn" data-edit-account="${a.id}">Editar</button>
-         <button class="link-btn danger" data-delete-account="${a.id}">Excluir conta</button>
-       </div>
-     </div>`;
-   }).join('');
-
-   return `<article class="account-card creditor-card">
-     <div class="account-top">
-       <div class="account-name">${accountIcon(g.name)}<div><h3>${esc(g.name)}</h3><small>${g.accounts.length} ${g.accounts.length===1?'conta':'contas'}</small></div></div>
-       <div class="account-balance"><small>Total restante</small><strong>${fmt.format(totalRemaining)}</strong></div>
-     </div>
-     <div class="progress"><span style="width:${pctGrupo}%"></span></div>
-     <div class="creditor-summary">
-       <span>Original: ${fmt.format(original)}</span>
-       <span>Pago: ${fmt.format(totalPaid)} • ${pct(pctGrupo)}</span>
-     </div>
-     <div class="sub-accounts">${accountRows}</div>
-     <div class="creditor-actions">
-       <button class="secondary-btn small" data-add-under="${esc(g.name)}">+ Adicionar conta</button>
-     </div>
+ // ----- Dívidas: uma linha por conta; o detalhe abre na folha -----
+ const filtrar=a=>{
+   if(debtFilter==='late'){const i=vencInfo(a);return !!(i&&i.atraso!=null);}
+   if(debtFilter==='card')return a.type==='credit_card';
+   if(debtFilter==='loan')return ['loan','consigned','financing'].includes(a.type);
+   return true;
+ };
+ $$('#debtFilters [data-filter]').forEach(b=>b.classList.toggle('on',b.dataset.filter===debtFilter));
+ const gruposVis=groups.map(gr=>({...gr,accounts:gr.accounts.filter(filtrar)})).filter(gr=>gr.accounts.length);
+ els.accountsList.innerHTML=gruposVis.length?gruposVis.map(gr=>{
+   const todas=groups.find(x=>x.name===gr.name).accounts;
+   const original=todas.reduce((s,a)=>s+Number(a.original),0), totalPaid=todas.reduce((s,a)=>s+paid(a),0);
+   const totalRemaining=Math.max(0,original-totalPaid), pctGrupo=original?Math.min(100,totalPaid/original*100):0;
+   const linhas=gr.accounts.map((a,i)=>{
+     const p=paid(a),r=remaining(a),apct=a.original?Math.min(100,p/a.original*100):0, vi=vencInfo(a), tv=vi?textoVenc(vi,a):null;
+     const label=a.detail||(todas.length===1?accountTypeLabel(a.type):`Conta ${i+1}`);
+     const meta=tv?`<span class="${tv.cls}">${tv.txt}</span>`:`<span>${esc(accountTypeLabel(a.type))}${a.type==='credit_card'&&a.cardLimit?` · limite ${fmt.format(a.cardLimit)}`:''}</span>`;
+     return `<div class="sub-row" data-open-account="${a.id}" role="button" tabindex="0">
+       <div class="sub-t"><b>${accountTypeIcon(a.type)} ${esc(label)}</b>${meta}<span class="mini-bar"><i style="width:${apct}%"></i></span></div>
+       <div class="sub-v sub-account-balance"><b>${fmt.format(r)}</b></div>
+       <button type="button" class="pay-mini" data-pay="${a.id}" aria-label="Registrar pagamento de ${esc(label)}">+</button>
+     </div>`;}).join('');
+   return `<article class="creditor-card">
+     <div class="cred-head">${accountIcon(gr.name)}<div class="cred-t"><h3>${esc(gr.name)}</h3><span class="creditor-summary"><span>${todas.length} ${todas.length===1?'conta':'contas'} · ${pct(pctGrupo)} pago</span></span></div>
+       <div class="cred-v account-balance"><b>${fmt.format(totalRemaining)}</b><small>de ${fmt.format(original)}</small></div></div>
+     ${linhas}
+     <button type="button" class="add-under" data-add-under="${esc(gr.name)}">+ conta em ${esc(gr.name)}</button>
    </article>`;
- }).join(''):'<div class="empty">Nenhuma conta cadastrada.</div>';
+ }).join(''):`<div class="empty">${state.accounts.length?'Nenhuma conta neste filtro.':'Nenhuma conta cadastrada. Toque em “+ Conta”.'}</div>`;
 
  const allPayments=state.accounts.flatMap(a=>(a.payments||[]).map(p=>({...p,accountId:a.id,accountName:accountDisplay(a)}))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||0)-(a.createdAt||0));
- els.paymentsList.innerHTML=allPayments.length?allPayments.slice(0,30).map(p=>`<div class="payment-row"><div class="payment-meta"><strong>${esc(p.accountName)}</strong><small>${dateBR(p.date)}${p.note?' • '+esc(p.note):''}</small></div><div class="payment-value"><strong>-${fmt.format(p.amount)}</strong><span class="row-actions"><button data-edit-payment="${p.accountId}|${p.id}">Editar</button><button data-delete-payment="${p.accountId}|${p.id}">Excluir</button></span></div></div>`).join(''):'<div class="empty">Nenhum pagamento lançado.</div>';
+ els.paymentsList.innerHTML=allPayments.length?allPayments.slice(0,8).map(linhaPagamento).join(''):'<div class="empty">Nenhum pagamento lançado.</div>';
+ if(els.accountSheet?.open&&sheetId)renderSheet(sheetId);
  renderCosts();
 }
 function renderCosts(){
@@ -700,13 +716,10 @@ function fillCostCategories(sel){
 }
 function setView(view){
  currentView=view;
- const costs=view==='costs';
- els.debtsView.classList.toggle('hidden',costs);els.costsView.classList.toggle('hidden',!costs);
- els.debtSummary.classList.toggle('hidden',costs);els.costSummary.classList.toggle('hidden',!costs);
- els.pageTitle.textContent=costs?'Controle de Custos':'Minhas Contas';
- els.pageSubtitle.textContent=costs?'Veja quanto está gastando e onde o dinheiro está indo.':'Acompanhe o saldo e registre cada pagamento.';
+ [['home','#homeView'],['debts','#debtsView'],['costs','#costsView'],['more','#moreView']].forEach(([v,id])=>$(id)?.classList.toggle('hidden',v!==view));
  $$('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
- els.fab.setAttribute('aria-label',costs?'Novo gasto':'Registrar pagamento');
+ els.fab.setAttribute('aria-label',view==='costs'?'Novo gasto':'Registrar pagamento');
+ window.scrollTo(0,0);
  render();
 }
 let editPay=null, editCost=null, editAcc=null;
@@ -714,19 +727,42 @@ function openPayment(id,valor,edit){
  if(!state.accounts.length)return alert('Adicione uma conta primeiro.');
  els.paymentForm.reset(); editPay=edit||null;
  els.paymentDate.value=today(); if(id)els.paymentAccount.value=id;
- if(valor)els.paymentAmount.value=String(valor);
+ if(valor)els.paymentAmount.value=valorCampo(valor);
  if(edit){const a=state.accounts.find(x=>x.id===edit.aid),p=a&&a.payments.find(x=>x.id===edit.pid);if(!p)return;
-   els.paymentAccount.value=a.id;els.paymentAmount.value=String(p.amount);els.paymentDate.value=p.date||today();els.paymentNote.value=p.note||'';}
+   els.paymentAccount.value=a.id;els.paymentAmount.value=valorCampo(p.amount);els.paymentDate.value=p.date||today();els.paymentNote.value=p.note||'';}
  els.paymentAccount.disabled=!!edit;
+ sugestoes(); largura(els.paymentAmount);
  $('#paymentTitle').textContent=edit?'Editar pagamento':'Registrar pagamento';
  els.paymentDialog.showModal();
 }
 function openCost(edit){
  els.costForm.reset(); editCost=edit||null; fillCostCategories(); els.costDate.value=today();
  if(edit){const c=state.costs.find(x=>x.id===edit);if(!c)return;fillCostCategories(c.category);
-   els.costAmount.value=String(c.amount);els.costPlace.value=c.place||'';els.costDate.value=c.date||today();els.costNote.value=c.note||'';}
- $('#costTitle').textContent=edit?'Editar gasto':'Novo gasto';
+   els.costAmount.value=valorCampo(c.amount);els.costPlace.value=c.place||'';els.costDate.value=c.date||today();els.costNote.value=c.note||'';}
+ $('#costTitle').textContent=edit?'Editar gasto':'Novo gasto'; largura(els.costAmount);
  els.costDialog.showModal();
+}
+/* TECLADO DE DINHEIRO: o teclado do telefone para número muda de aparelho
+   para aparelho (ponto ou vírgula, sem vírgula no iPhone...). Este é sempre
+   igual: dígitos, vírgula e apagar, com no máximo 2 casas. */
+function valorCampo(v){const n=Number(v)||0;return Number.isInteger(n)?String(n):n.toFixed(2).replace('.',',');}
+/* o campo do valor cresce com o número: "R$" fica colado nele */
+function largura(input){if(input)input.style.width=`${Math.max(1,(input.value||input.placeholder||'0').length)+0.4}ch`;}
+function tecla(input,k){
+ let v=input.value.replace(/[^\d,]/g,'');
+ if(k==='back')v=v.slice(0,-1);
+ else if(k===','){if(!v.includes(','))v=(v||'0')+',';}
+ else{const [int,dec]=v.split(',');if(dec!==undefined){if(dec.length<2)v+=k;}else if(int.length<9)v=(int==='0'?'':int)+k;}
+ input.value=v; largura(input);
+}
+function sugestoes(){
+ const box=$('#paySuggest');if(!box)return;
+ const a=state.accounts.find(x=>x.id===els.paymentAccount.value);
+ if(!a||editPay){box.innerHTML='';return;}
+ const r=remaining(a),it=[];
+ if(a.installment&&a.installment<r-.001)it.push(['Parcela',a.installment]);
+ if(r>0)it.push(['Tudo',r]);
+ box.innerHTML=it.map(([n,v])=>`<button type="button" data-suggest="${v}">${n} ${fmt.format(v)}</button>`).join('');
 }
 /* DESFAZER: excluir pagamento ou gasto não pergunta nada -- some na hora e
    fica 7 segundos o "Desfazer". Perguntar antes não evitava o toque errado. */
@@ -749,7 +785,15 @@ $$('.nav-btn').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)
 
 document.addEventListener('click',e=>{
  const close=e.target.closest('[data-close]');if(close)document.getElementById(close.dataset.close)?.close();
- const payBtn=e.target.closest('[data-pay]');if(payBtn)openPayment(payBtn.dataset.pay);
+ const key=e.target.closest('[data-key]');if(key){const inp=document.getElementById(key.closest('[data-keypad]').dataset.keypad);if(inp)tecla(inp,key.dataset.key);return;}
+ const sug=e.target.closest('[data-suggest]');if(sug){els.paymentAmount.value=valorCampo(sug.dataset.suggest);largura(els.paymentAmount);return;}
+ const flt=e.target.closest('[data-filter]');if(flt){debtFilter=flt.dataset.filter;render();return;}
+ const go=e.target.closest('[data-goto]');if(go){setView(go.dataset.goto);return;}
+ const act=e.target.closest('[data-goto-action]');if(act){if(act.dataset.gotoAction==='account')openAccount();else{resetPdfImport();els.pdfImportDialog.showModal();}return;}
+ // ações que abrem outra folha fecham a da conta antes
+ if(e.target.closest('[data-pay],[data-edit-account],[data-delete-account],[data-edit-payment]')&&els.accountSheet.open&&!e.target.closest('[data-delete-payment]'))els.accountSheet.close();
+ const pay0=e.target.closest('[data-pay]');if(pay0){openPayment(pay0.dataset.pay);return;}
+ const open=e.target.closest('[data-open-account]');if(open){openSheet(open.dataset.openAccount);return;}
  const addUnder=e.target.closest('[data-add-under]');if(addUnder)openAccount(addUnder.dataset.addUnder);
  const payDue=e.target.closest('[data-pay-due]');if(payDue){const a=state.accounts.find(x=>x.id===payDue.dataset.payDue);if(a)openPayment(a.id,a.installment||'');}
  const edAcc=e.target.closest('[data-edit-account]');if(edAcc)openAccount('',edAcc.dataset.editAccount);
@@ -767,7 +811,7 @@ document.addEventListener('click',e=>{
      desfazer(`Gasto de ${fmt.format(c.amount)} excluído`,()=>mutate(s=>{if(!s.costs.some(x=>x.id===copia.id))s.costs.push({...copia});}));}}
 });
 els.paymentForm.addEventListener('submit',e=>{
- e.preventDefault();const a=state.accounts.find(x=>x.id===els.paymentAccount.value),amount=Number(els.paymentAmount.value);if(!a||amount<=0)return;
+ e.preventDefault();const a=state.accounts.find(x=>x.id===els.paymentAccount.value),amount=brMoneyToNumber(els.paymentAmount.value);if(!a||amount<=0)return;
  const r=remaining(a)+(editPay?Number((a.payments.find(x=>x.id===editPay.pid)||{}).amount||0):0);if(amount>r+.001&&!confirm(`O pagamento é maior que o saldo restante (${fmt.format(r)}). Registrar mesmo assim?`))return;
  if(editPay){const{aid,pid}=editPay,dados={amount,date:els.paymentDate.value,note:els.paymentNote.value.trim()};editPay=null;els.paymentDialog.close();
    mutate(s=>{const x=s.accounts.find(y=>y.id===aid),q=x&&x.payments.find(y=>y.id===pid);if(q)Object.assign(q,dados);});return;}
@@ -775,6 +819,8 @@ els.paymentForm.addEventListener('submit',e=>{
 });
 els.accountCreditor?.addEventListener('change',()=>{const creditor=els.accountCreditor.value;els.accountName.disabled=!!creditor;$('#accountNameLabel').classList.toggle('hidden',!!creditor);if(creditor)els.accountName.value=creditor;else els.accountName.value='';});
 els.accountType?.addEventListener('change',toggleAccountTypeFields);
+els.paymentAccount.addEventListener('change',sugestoes);
+[els.paymentAmount,els.costAmount].forEach(i=>i.addEventListener('input',()=>largura(i)));
 els.costCategory.addEventListener('change',()=>{
  if(els.costCategory.value!=='__nova')return;
  const nome=(prompt('Nome da nova categoria:','')||'').trim().slice(0,30);
@@ -795,7 +841,7 @@ els.accountForm.addEventListener('submit',e=>{e.preventDefault();const creditor=
    mutate(s=>{const x=s.accounts.find(y=>y.id===id);if(x)Object.assign(x,campos);});return;}
  const a={id:novoId(),...campos,payments:[],createdAt:Date.now()};if(dueDay)a.vencDesde=today();
  mutate(s=>{if(!s.accounts.some(y=>y.id===a.id))s.accounts.push(JSON.parse(JSON.stringify(a)));});});
-els.costForm.addEventListener('submit',e=>{e.preventDefault();const amount=Number(els.costAmount.value),place=els.costPlace.value.trim();if(amount<=0||!place)return;const cat=els.costCategory.value==='__nova'?'Outros':els.costCategory.value;
+els.costForm.addEventListener('submit',e=>{e.preventDefault();const amount=brMoneyToNumber(els.costAmount.value),place=els.costPlace.value.trim();if(amount<=0||!place)return;const cat=els.costCategory.value==='__nova'?'Outros':els.costCategory.value;
  const dados={amount,category:cat,place,date:els.costDate.value,note:els.costNote.value.trim()};els.monthFilter.value=els.costDate.value.slice(0,7);els.costDialog.close();
  if(editCost){const id=editCost;editCost=null;mutate(s=>{const x=s.costs.find(y=>y.id===id);if(x)Object.assign(x,dados);});return;}
  const c={id:novoId(),...dados,createdAt:Date.now()};mutate(s=>{if(!s.costs.some(y=>y.id===c.id))s.costs.push({...c});});});

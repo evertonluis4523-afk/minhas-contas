@@ -3,9 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#5b2bd9" />
+  <meta name="theme-color" content="#f5f6fa" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0f1117" media="(prefers-color-scheme: dark)" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="color-scheme" content="light dark" />
   <meta name="apple-mobile-web-app-title" content="Minhas Contas" />
   <title>Minhas Contas</title>
   <link rel="manifest" href="./manifest.webmanifest" />
@@ -33,108 +35,97 @@
   </section>
 
   <div id="app" class="app-shell hidden">
-    <header class="hero">
-      <div class="hero-top">
-        <div>
-          <p class="eyebrow">CONTROLE FINANCEIRO</p>
-          <h1 id="pageTitle">Minhas Contas</h1>
-          <p id="pageSubtitle" class="subtitle">Acompanhe o saldo e registre cada pagamento.</p>
+    <!-- ================= INÍCIO ================= -->
+    <section id="homeView" class="view">
+      <header class="top"><div><small id="greeting">Olá</small><h1>Minhas Contas</h1></div></header>
+      <section id="debtSummary" class="hero-card">
+        <span class="hero-label">Falta pagar</span>
+        <strong id="totalRemaining" class="hero-value">R$ 0,00</strong>
+        <div class="hero-bar"><span id="heroBar"></span></div>
+        <div class="hero-line"><span>Pago <b id="totalPaid">R$ 0,00</b> · <b id="paidPercent">0%</b></span><span id="totalOriginal">Original: R$ 0,00</span></div>
+        <span id="payoffForecast" class="forecast"></span>
+      </section>
+      <section id="dueCard" class="block">
+        <div class="block-head"><b>Próximos vencimentos</b><span>atrasados primeiro</span></div>
+        <div id="dueList" class="card due-list"></div>
+      </section>
+      <section class="block">
+        <div class="block-head"><b id="homeMonthName">Este mês</b><button type="button" class="link" data-goto="costs">ver gastos</button></div>
+        <div class="month-cards">
+          <div class="card mini"><small>Gastei</small><b id="homeSpent">R$ 0,00</b><em id="homeCompare"></em></div>
+          <div class="card mini"><small>Paguei em dívidas</small><b id="homePaid">R$ 0,00</b><em id="homePaidCount"></em></div>
         </div>
-        <div class="top-actions">
-          <button id="backupBtn" class="icon-btn" aria-label="Backup">⇩</button>
-          <button id="logoutBtn" class="icon-btn" aria-label="Bloquear">🔒</button>
-        </div>
+      </section>
+      <section class="block">
+        <div class="block-head"><b>Últimos pagamentos</b></div>
+        <div id="paymentsList" class="card list"></div>
+      </section>
+    </section>
+
+    <!-- ================= DÍVIDAS ================= -->
+    <section id="debtsView" class="view hidden">
+      <header class="top"><div><small id="accountCount">0 credores</small><h1>Dívidas</h1></div>
+        <div class="top-actions"><button id="importPdfBtn" type="button" class="chip-btn">PDF</button><button id="addAccountBtn" type="button" class="chip-btn pri">+ Conta</button></div></header>
+      <div id="debtFilters" class="filters">
+        <button type="button" data-filter="open" class="on">Em aberto</button><button type="button" data-filter="late">Atrasadas</button><button type="button" data-filter="card">Cartões</button><button type="button" data-filter="loan">Empréstimos</button>
       </div>
+      <section id="accountsList" class="accounts-list" aria-live="polite"></section>
+      <div id="paidOffList"></div>
+    </section>
 
-      <section id="debtSummary" class="summary-card">
-        <div>
-          <span class="label">Total restante</span>
-          <strong id="totalRemaining">R$ 0,00</strong>
-          <span id="totalOriginal" class="muted">Original: R$ 0,00</span>
-          <span id="payoffForecast" class="muted forecast"></span>
-        </div>
-        <div class="summary-side">
-          <span class="label">Já pago</span>
-          <strong id="totalPaid">R$ 0,00</strong>
-          <span id="paidPercent" class="pill">0%</span>
-        </div>
+    <!-- ================= GASTOS ================= -->
+    <section id="costsView" class="view hidden">
+      <header class="top"><div><small>Controle de custos</small><h1>Gastos</h1></div>
+        <div class="top-actions"><button id="addCostBtn" type="button" class="chip-btn pri">+ Gasto</button></div></header>
+      <section id="costSummary" class="hero-card soft">
+        <div class="cost-sum"><div><span class="hero-label">Gasto no mês</span><strong id="monthSpent" class="hero-value">R$ 0,00</strong>
+          <span id="monthCount" class="hero-sub">0 lançamentos</span><span id="monthCompare" class="compare"></span></div>
+          <label class="month-pick"><span id="monthName" class="month-name">—</span><input id="monthFilter" type="month" aria-label="Mês" /></label></div>
       </section>
-
-      <section id="costSummary" class="summary-card hidden">
-        <div>
-          <span class="label">Gasto no mês</span>
-          <strong id="monthSpent">R$ 0,00</strong>
-          <span id="monthCount" class="muted">0 lançamentos</span>
-          <span id="monthCompare" class="muted compare"></span>
-        </div>
-        <div class="summary-side">
-          <span class="label">Mês selecionado</span>
-          <strong id="monthName" class="month-name">—</strong>
-        </div>
+      <section id="categorySummary" class="category-grid"></section>
+      <section class="block">
+        <div class="block-head"><b>Gastos do mês</b><span id="costCount">0 lançamentos</span></div>
+        <div id="costsList" class="card list"></div>
       </section>
-    </header>
+    </section>
 
-    <main>
-      <section id="debtsView">
-        <section id="dueCard" class="history-card due-card">
-          <div class="section-head compact"><div><h2>Próximos vencimentos</h2><p>atrasados primeiro</p></div></div>
-          <div id="dueList" class="due-list"></div>
-        </section>
-        <section class="section-head">
-          <div><h2>Contas</h2><p id="accountCount">0 contas</p></div>
-          <div class="section-actions"><button id="importPdfBtn" class="secondary-btn">⇧ Importar PDF</button><button id="addAccountBtn" class="secondary-btn">+ Conta</button></div>
-        </section>
-        <section id="accountsList" class="accounts-list" aria-live="polite"></section>
-        <div id="paidOffList"></div>
-
-        <section class="history-card">
-          <div class="section-head compact">
-            <div><h2>Últimos pagamentos</h2><p>Histórico geral</p></div>
-          </div>
-          <div id="paymentsList" class="payments-list"></div>
-        </section>
-      </section>
-
-      <section id="costsView" class="hidden">
-        <section class="cost-toolbar">
-          <label>Mês
-            <input id="monthFilter" type="month" />
-          </label>
-          <button id="addCostBtn" class="primary-btn">+ Novo gasto</button>
-        </section>
-
-        <section id="categorySummary" class="category-grid"></section>
-
-        <section class="history-card">
-          <div class="section-head compact">
-            <div><h2>Gastos do mês</h2><p id="costCount">0 lançamentos</p></div>
-          </div>
-          <div id="costsList" class="payments-list"></div>
-        </section>
-      </section>
-    </main>
+    <!-- ================= MAIS ================= -->
+    <section id="moreView" class="view hidden">
+      <header class="top"><div><small id="whoEmail">&nbsp;</small><h1>Mais</h1></div></header>
+      <div class="card menu">
+        <button type="button" data-goto-action="account">Cadastrar nova conta<span>›</span></button>
+        <button type="button" data-goto-action="pdf">Importar dívidas por PDF<span>›</span></button>
+        <button type="button" id="backupBtn">Backup (exportar ou importar)<span>›</span></button>
+        <button type="button" id="logoutBtn" class="danger">Sair desta conta<span>›</span></button>
+      </div>
+      <p class="security-note">Seus dados ficam na sua conta, sincronizados entre os seus aparelhos.</p>
+    </section>
 
     <nav class="bottom-nav">
-      <button class="nav-btn active" data-view="debts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18M7 15h4"/></svg><b>Contas</b></button>
+      <button class="nav-btn active" data-view="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><b>Início</b></button>
+      <button class="nav-btn" data-view="debts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18M7 15h4"/></svg><b>Dívidas</b></button>
       <button id="fab" class="nav-add" aria-label="Registrar pagamento">+</button>
-      <button class="nav-btn" data-view="costs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg><b>Custos</b></button>
+      <button class="nav-btn" data-view="costs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg><b>Gastos</b></button>
+      <button class="nav-btn" data-view="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><b>Mais</b></button>
     </nav>
   </div>
 
-  <dialog id="paymentDialog" class="modal">
+  <dialog id="accountSheet" class="modal sheet"><div class="modal-card" id="accountSheetBody"></div></dialog>
+
+  <dialog id="paymentDialog" class="modal sheet">
     <form id="paymentForm" method="dialog" class="modal-card">
-      <div class="modal-head"><div><span class="eyebrow dark">LANÇAMENTO</span><h3 id="paymentTitle">Registrar pagamento</h3></div><button type="button" class="close-btn" data-close="paymentDialog">×</button></div>
+      <div class="sheet-handle"></div><div class="modal-head"><div><span class="eyebrow dark">LANÇAMENTO</span><h3 id="paymentTitle">Registrar pagamento</h3></div><button type="button" class="close-btn" data-close="paymentDialog">×</button></div>
       <label>Conta<select id="paymentAccount" required></select></label>
-      <label>Valor pago<input id="paymentAmount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0,00" required /></label>
+      <div class="amount-box"><span>R$</span><input id="paymentAmount" class="amount-input" type="text" inputmode="none" autocomplete="off" placeholder="0" required aria-label="Valor pago" /></div><div id="paySuggest" class="suggest"></div><div class="keypad" data-keypad="paymentAmount"><button type="button" data-key="1">1</button><button type="button" data-key="2">2</button><button type="button" data-key="3">3</button><button type="button" data-key="4">4</button><button type="button" data-key="5">5</button><button type="button" data-key="6">6</button><button type="button" data-key="7">7</button><button type="button" data-key="8">8</button><button type="button" data-key="9">9</button><button type="button" data-key=",">,</button><button type="button" data-key="0">0</button><button type="button" data-key="back" aria-label="Apagar">⌫</button></div>
       <label>Data<input id="paymentDate" type="date" required /></label>
       <label>Observação<input id="paymentNote" type="text" maxlength="80" placeholder="Ex.: parcela de agosto" /></label>
       <div class="modal-actions"><button type="button" class="ghost-btn" data-close="paymentDialog">Cancelar</button><button type="submit" class="primary-btn">Salvar pagamento</button></div>
     </form>
   </dialog>
 
-  <dialog id="accountDialog" class="modal">
+  <dialog id="accountDialog" class="modal sheet">
     <form id="accountForm" method="dialog" class="modal-card">
-      <div class="modal-head"><div><span class="eyebrow dark">CADASTRO</span><h3 id="accountTitle">Adicionar conta</h3></div><button type="button" class="close-btn" data-close="accountDialog">×</button></div>
+      <div class="sheet-handle"></div><div class="modal-head"><div><span class="eyebrow dark">CADASTRO</span><h3 id="accountTitle">Adicionar conta</h3></div><button type="button" class="close-btn" data-close="accountDialog">×</button></div>
       <label>Banco / Credor
         <select id="accountCreditor">
           <option value="">Novo banco / credor</option>
@@ -150,10 +141,10 @@
     </form>
   </dialog>
 
-  <dialog id="costDialog" class="modal">
+  <dialog id="costDialog" class="modal sheet">
     <form id="costForm" method="dialog" class="modal-card">
-      <div class="modal-head"><div><span class="eyebrow dark">CONTROLE DE CUSTOS</span><h3 id="costTitle">Novo gasto</h3></div><button type="button" class="close-btn" data-close="costDialog">×</button></div>
-      <label>Valor<input id="costAmount" type="number" min="0.01" step="0.01" inputmode="decimal" required placeholder="0,00" /></label>
+      <div class="sheet-handle"></div><div class="modal-head"><div><span class="eyebrow dark">CONTROLE DE CUSTOS</span><h3 id="costTitle">Novo gasto</h3></div><button type="button" class="close-btn" data-close="costDialog">×</button></div>
+      <div class="amount-box"><span>R$</span><input id="costAmount" class="amount-input" type="text" inputmode="none" autocomplete="off" placeholder="0" required aria-label="Valor" /></div><div class="keypad" data-keypad="costAmount"><button type="button" data-key="1">1</button><button type="button" data-key="2">2</button><button type="button" data-key="3">3</button><button type="button" data-key="4">4</button><button type="button" data-key="5">5</button><button type="button" data-key="6">6</button><button type="button" data-key="7">7</button><button type="button" data-key="8">8</button><button type="button" data-key="9">9</button><button type="button" data-key=",">,</button><button type="button" data-key="0">0</button><button type="button" data-key="back" aria-label="Apagar">⌫</button></div>
       <label>Categoria
         <select id="costCategory" required></select>
       </label>
@@ -165,9 +156,9 @@
   </dialog>
 
 
-  <dialog id="pdfImportDialog" class="modal">
+  <dialog id="pdfImportDialog" class="modal sheet">
     <div class="modal-card pdf-import-card">
-      <div class="modal-head">
+      <div class="sheet-handle"></div><div class="modal-head">
         <div>
           <span class="eyebrow dark">IMPORTAÇÃO INTELIGENTE</span>
           <h3>Importar dívidas por PDF</h3>
@@ -217,14 +208,14 @@
     </div>
   </dialog>
 
-<dialog id="backupDialog" class="modal">
+<dialog id="backupDialog" class="modal sheet">
     <div class="modal-card">
-      <div class="modal-head"><div><span class="eyebrow dark">DADOS</span><h3>Backup</h3></div><button type="button" class="close-btn" data-close="backupDialog">×</button></div>
+      <div class="sheet-handle"></div><div class="modal-head"><div><span class="eyebrow dark">DADOS</span><h3>Backup</h3></div><button type="button" class="close-btn" data-close="backupDialog">×</button></div>
       <p class="backup-copy">Exporte contas, pagamentos e gastos ou importe um backup anterior.</p>
       <div class="backup-grid"><button id="exportBtn" class="primary-btn" type="button">Exportar backup</button><label class="import-btn">Importar backup<input id="importInput" type="file" accept="application/json" hidden /></label></div>
     </div>
   </dialog>
-  <dialog id="createAccountDialog" class="modal"><form id="createAccountForm" class="modal-card"><div class="modal-head"><div><span class="eyebrow dark">NOVO USUÁRIO</span><h3>Criar minha conta</h3></div><button type="button" class="close-btn" data-close="createAccountDialog">×</button></div><label>E-mail<input id="newUserEmail" type="email" required></label><label>Senha<input id="newUserPassword" type="password" minlength="6" required></label><label>Confirmar senha<input id="newUserPassword2" type="password" minlength="6" required></label><p class="field-note">Seus dados ficam separados dos demais usuários.</p><div class="modal-actions"><button type="button" class="ghost-btn" data-close="createAccountDialog">Cancelar</button><button type="submit" class="primary-btn">Criar conta</button></div></form></dialog>
+  <dialog id="createAccountDialog" class="modal sheet"><form id="createAccountForm" class="modal-card"><div class="sheet-handle"></div><div class="modal-head"><div><span class="eyebrow dark">NOVO USUÁRIO</span><h3>Criar minha conta</h3></div><button type="button" class="close-btn" data-close="createAccountDialog">×</button></div><label>E-mail<input id="newUserEmail" type="email" required></label><label>Senha<input id="newUserPassword" type="password" minlength="6" required></label><label>Confirmar senha<input id="newUserPassword2" type="password" minlength="6" required></label><p class="field-note">Seus dados ficam separados dos demais usuários.</p><div class="modal-actions"><button type="button" class="ghost-btn" data-close="createAccountDialog">Cancelar</button><button type="submit" class="primary-btn">Criar conta</button></div></form></dialog>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
     if (window.pdfjsLib) {
