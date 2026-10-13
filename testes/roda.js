@@ -50,7 +50,9 @@ async function abre(b, opt = {}) {
     timezoneId: 'America/Sao_Paulo', serviceWorkers: 'block' });
   const pg = await ctx.newPage(); const erros = [];
   pg.on('pageerror', e => erros.push(String(e.message).slice(0, 200)));
-  pg.on('dialog', d => { (pg.__dialogos = pg.__dialogos || []).push(d.message()); d.accept().catch(() => {}); });
+  pg.__respostas = [];
+  pg.on('dialog', d => { (pg.__dialogos = pg.__dialogos || []).push(d.message());
+    if (d.type() === 'prompt') d.accept(pg.__respostas.shift() || '').catch(() => {}); else d.accept().catch(() => {}); });
   if (opt.relogio) await pg.clock.setFixedTime(new Date(opt.relogio));
   await pg.addInitScript(o => {
     window.__fb = { user: o.logado === false ? null : { uid: 'u1', email: 'exemplo@email.com' }, db: { users: { u1: { finance: o.dados } } },
@@ -182,6 +184,102 @@ teste('tela-sem-armadilhas', async (b, t) => {
   t.ok('ícones da barra de baixo desenhados (não caractere que quebra)', r.navIcones, JSON.stringify(r));
   t.ok('o botão + fica na barra de baixo, sem cobrir valores', !r.cobre.length, JSON.stringify(r.cobre));
   t.ok('"Excluir conta" discreto (sem fundo colorido)', r.excluir.length && r.excluir.every(c => c === 'rgba(0, 0, 0, 0)'), JSON.stringify(r.excluir));
+  t.ok('sem erro na página', !erros.length, erros.join(' | '));
+  await ctx.close();
+});
+
+/* ---------- etapa B: vencimentos, Paguei, editar, desfazer, gastos ---------- */
+const DADOS_B = () => { const d = DADOS();
+  Object.assign(d.accounts[0], { cardDueDay: 15, dueDay: 15 });                                  // cartão: vence dia 15, pago em 10/09
+  Object.assign(d.accounts[1], { dueDay: 5, installment: 1500, vencDesde: '2026-08-01' });        // empréstimo: dia 5 de outubro sem pagamento
+  Object.assign(d.accounts[2], { dueDay: 20, installment: 412, vencDesde: '2026-10-01' });        // consignado: dia 20
+  d.costs.push({ id: 'c0', amount: 1000, category: 'Mercado', place: 'Compra do mês passado', date: '2026-09-20' });
+  return d; };
+const HOJE = '2026-10-13T12:00:00-03:00';
+const nuvem = pg => pg.evaluate(() => JSON.parse(JSON.stringify(window.__fb.db.users.u1.finance)));
+
+teste('vencimentos-e-paguei', async (b, t) => {
+  const { ctx, pg, erros } = await abre(b, { relogio: HOJE, dados: DADOS_B() });
+  const lista = await pg.evaluate(() => [...document.querySelectorAll('#dueList [data-due]')].map(x => x.getAttribute('data-due') + ' | ' + x.textContent.replace(/\s+/g, ' ').trim()));
+  t.ok('atrasada primeiro: Empréstimo, "atrasado 8 dias", R$ 1.500,00', /^a2 \|.*Empréstimo 01.*atrasad[oa] 8 dias.*R\$\s?1\.500,00/.test(lista[0] || ''), JSON.stringify(lista));
+  t.ok('depois o cartão, "vence em 2 dias"', /^a1 \|.*vence em 2 dias/.test(lista[1] || ''), JSON.stringify(lista));
+  t.ok('consignado: "vence em 7 dias" e "faltam 18 parcelas"', /^a3 \|.*vence em 7 dias.*faltam 18 parcelas/.test(lista[2] || ''), JSON.stringify(lista));
+  t.ok('quitada não entra nos vencimentos', !lista.some(x => /^a4/.test(x)), JSON.stringify(lista));
+  await pg.click('#dueList [data-due="a2"] [data-pay-due]'); await pg.waitForTimeout(100);
+  const f = await pg.evaluate(() => ({ conta: document.getElementById('paymentAccount').value, valor: document.getElementById('paymentAmount').value, data: document.getElementById('paymentDate').value, aberto: document.getElementById('paymentDialog').open }));
+  t.ok('Paguei abre o pagamento já com a conta, o valor da parcela e a data de hoje', f.aberto && f.conta === 'a2' && Number(f.valor) === 1500 && f.data === '2026-10-13', JSON.stringify(f));
+  await pg.evaluate(() => document.getElementById('paymentForm').requestSubmit()); await pg.waitForTimeout(150);
+  const depois = await pg.evaluate(() => (document.querySelector('#dueList [data-due="a2"]') || {}).textContent || '');
+  t.ok('pago: o empréstimo passa para o próximo vencimento (05/11)', /05\/11|5\s*nov/i.test(depois.replace(/\s+/g, ' ')) && !/atrasad/.test(depois), depois.replace(/\s+/g, ' '));
+  const quit = await pg.evaluate(() => document.getElementById('payoffForecast').textContent);
+  t.ok('quitação prevista pelo ritmo dos últimos 3 meses', /quitação prevista/i.test(quit) && /\/20\d\d/.test(quit), quit);
+  t.ok('sem erro na página', !erros.length, erros.join(' | '));
+  await ctx.close();
+});
+
+teste('fotos', async (b, t) => {
+  // só com FOTOS=<pasta>: fotos das telas com os dados fictícios, para conferir de olho
+  if (!process.env.FOTOS) return;
+  const { ctx, pg } = await abre(b, { relogio: HOJE, dados: DADOS_B() });
+  await pg.screenshot({ path: path.join(process.env.FOTOS, 'contas.png'), fullPage: true });
+  await pg.click('.nav-btn[data-view="costs"]'); await pg.waitForTimeout(150);
+  await pg.screenshot({ path: path.join(process.env.FOTOS, 'custos.png'), fullPage: true });
+  await pg.click('.nav-btn[data-view="debts"]'); await pg.click('#dueList [data-pay-due]'); await pg.waitForTimeout(150);
+  await pg.screenshot({ path: path.join(process.env.FOTOS, 'pagamento.png') });
+  await ctx.close();
+});
+
+teste('quitadas-editar-e-desfazer', async (b, t) => {
+  const { ctx, pg, erros } = await abre(b, { relogio: HOJE, dados: DADOS_B() });
+  const q = await pg.evaluate(() => ({ ativas: [...document.querySelectorAll('#accountsList .creditor-card h3')].map(x => x.textContent),
+    quitadas: (document.getElementById('paidOffList') || {}).textContent || '' }));
+  t.ok('quitada sai da lista principal e fica em "Quitadas"', !q.ativas.includes('Loja Gama') && /Quitadas\s*\(1\)/.test(q.quitadas) && /Loja Gama/.test(q.quitadas), JSON.stringify(q));
+  // editar pagamento
+  await pg.click('[data-edit-payment="a2|p3"]'); await pg.waitForTimeout(80);
+  const ed = await pg.evaluate(() => ({ valor: document.getElementById('paymentAmount').value, titulo: document.querySelector('#paymentDialog h3').textContent }));
+  t.ok('editar pagamento abre com o valor dele', Number(ed.valor) === 1500 && /Editar/.test(ed.titulo), JSON.stringify(ed));
+  await pg.fill('#paymentAmount', '1400'); await pg.evaluate(() => document.getElementById('paymentForm').requestSubmit()); await pg.waitForTimeout(150);
+  let n = await nuvem(pg); const a2 = n.accounts.find(a => a.id === 'a2');
+  t.ok('editado na nuvem, sem duplicar', a2.payments.length === 2 && a2.payments.find(p => p.id === 'p3').amount === 1400, JSON.stringify(a2.payments));
+  // excluir pagamento sem pergunta, com Desfazer
+  await pg.click('[data-delete-payment="a1|p1"]'); await pg.waitForTimeout(150);
+  n = await nuvem(pg);
+  const semP1 = n.accounts.find(a => a.id === 'a1').payments.length === 0;
+  const toast = await pg.evaluate(() => (document.getElementById('undoToast') || {}).textContent || '');
+  await pg.click('#undoToast button'); await pg.waitForTimeout(150);
+  n = await nuvem(pg);
+  t.ok('excluir pagamento: some, mostra "Desfazer"', semP1 && /Desfazer/.test(toast), toast);
+  t.ok('Desfazer devolve o pagamento', n.accounts.find(a => a.id === 'a1').payments.some(p => p.id === 'p1'), JSON.stringify(n.accounts[0].payments));
+  // editar conta: vencimento e parcela
+  await pg.click('[data-edit-account="a3"]'); await pg.waitForTimeout(80);
+  await pg.fill('#accountDueDay', '25'); await pg.fill('#accountInstallment', '500');
+  await pg.evaluate(() => document.getElementById('accountForm').requestSubmit()); await pg.waitForTimeout(150);
+  n = await nuvem(pg); const a3 = n.accounts.find(a => a.id === 'a3');
+  t.ok('editar conta grava dia do vencimento e parcela', a3.dueDay === 25 && a3.installment === 500 && n.accounts.length === 4, JSON.stringify(a3));
+  t.ok('sem erro na página', !erros.length, erros.join(' | '));
+  await ctx.close();
+});
+
+teste('gastos-comparacao-limite-e-categoria-propria', async (b, t) => {
+  const { ctx, pg, erros } = await abre(b, { relogio: HOJE, dados: DADOS_B() });
+  await pg.click('.nav-btn[data-view="costs"]'); await pg.waitForTimeout(100);
+  const cmp = await pg.evaluate(() => document.getElementById('monthCompare').textContent);
+  t.ok('compara com o mês anterior: "↓ 51% que setembro"', /↓\s*51% que setembro/.test(cmp), cmp);
+  pg.__respostas.push('300');
+  await pg.click('[data-budget="Mercado"]'); await pg.waitForTimeout(150);
+  const card = await pg.evaluate(() => { const c = document.querySelector('[data-budget="Mercado"]'); return { txt: c.textContent.replace(/\s+/g, ' '), acima: c.classList.contains('over') }; });
+  t.ok('limite do mês na categoria: "R$ 312,40 de R$ 300,00", marcado acima', /de R\$\s?300,00/.test(card.txt) && card.acima, JSON.stringify(card));
+  let n = await nuvem(pg);
+  t.ok('limite gravado na nuvem', n.budgets && n.budgets.Mercado === 300, JSON.stringify(n.budgets));
+  await pg.click('#addCostBtn'); await pg.waitForTimeout(80);
+  pg.__respostas.push('Pet');
+  await pg.selectOption('#costCategory', '__nova'); await pg.waitForTimeout(100);
+  const sel = await pg.evaluate(() => document.getElementById('costCategory').value);
+  t.ok('"+ Nova categoria…" cria e escolhe a categoria', sel === 'Pet', sel);
+  await pg.fill('#costAmount', '45'); await pg.fill('#costPlace', 'Ração exemplo');
+  await pg.evaluate(() => document.getElementById('costForm').requestSubmit()); await pg.waitForTimeout(150);
+  n = await nuvem(pg);
+  t.ok('categoria própria fica guardada e o gasto usa ela', (n.categories || []).includes('Pet') && n.costs.some(c => c.category === 'Pet'), JSON.stringify({ cats: n.categories }));
   t.ok('sem erro na página', !erros.length, erros.join(' | '));
   await ctx.close();
 });
