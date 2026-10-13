@@ -244,8 +244,8 @@ function msgDados(err){
  if(/network|offline/i.test(t))return 'Sem internet para carregar seus dados. Confira a conexão e abra de novo.';
  return 'Falha ao carregar seus dados do Firebase.';
 }
-function showLogin(message='Entre com seu e-mail e senha.'){
- els.loginHelp.textContent=message;
+function showLogin(message){
+ if(message!==undefined)els.loginHelp.textContent=message;
  els.app.classList.add('hidden');
  els.loginScreen.classList.remove('hidden');
 }
@@ -257,6 +257,7 @@ function unlock(){
 }
 els.loginForm.addEventListener('submit',async e=>{
  e.preventDefault();
+ lembrarAoEntrar=els.loginScreen.classList.contains('lembrado')?true:!!$('#loginRemember')?.checked;
  const email=els.loginEmail.value.trim();
  const pass=els.loginPassword.value;
  try{
@@ -651,6 +652,7 @@ function render(){
  setTxt('#homePaid',fmt.format(pagMes.reduce((s,p)=>s+Number(p.amount||0),0)));
  setTxt('#homePaidCount',`${pagMes.length} ${pagMes.length===1?'pagamento':'pagamentos'}`);
  setTxt('#whoEmail',currentUser?.email||'');
+ if(typeof pintaMais==='function'&&currentUser)pintaMais();
 
  // ----- Dívidas: uma linha por conta; o detalhe abre na folha -----
  const filtrar=a=>{
@@ -789,7 +791,7 @@ document.addEventListener('click',e=>{
  const sug=e.target.closest('[data-suggest]');if(sug){els.paymentAmount.value=valorCampo(sug.dataset.suggest);largura(els.paymentAmount);return;}
  const flt=e.target.closest('[data-filter]');if(flt){debtFilter=flt.dataset.filter;render();return;}
  const go=e.target.closest('[data-goto]');if(go){setView(go.dataset.goto);return;}
- const act=e.target.closest('[data-goto-action]');if(act){if(act.dataset.gotoAction==='account')openAccount();else{resetPdfImport();els.pdfImportDialog.showModal();}return;}
+ const act=e.target.closest('[data-goto-action]');if(act){const k=act.dataset.gotoAction;if(k==='account')openAccount();else if(k==='perfil')abrePerfil();else{resetPdfImport();els.pdfImportDialog.showModal();}return;}
  // ações que abrem outra folha fecham a da conta antes
  if(e.target.closest('[data-pay],[data-edit-account],[data-delete-account],[data-edit-payment]')&&els.accountSheet.open&&!e.target.closest('[data-delete-payment]'))els.accountSheet.close();
  const pay0=e.target.closest('[data-pay]');if(pay0){openPayment(pay0.dataset.pay);return;}
@@ -854,7 +856,9 @@ showLogin('Verificando acesso...');
 onAuthStateChanged(auth,async user=>{
   if(user){
     try{
+      loginGuardar(user);
       await startCloudSync(user);
+      await carregaPerfil(user);
       unlock();
     }catch(err){
       console.error(err);
@@ -863,12 +867,136 @@ onAuthStateChanged(auth,async user=>{
   }else{
     currentUser=null; cloudReady=false;
     if(unsubscribeData){unsubscribeData();unsubscribeData=null;}
-    state=blankState();
+    state=blankState(); PERFIL={};
     render();
+    prepararPorta(false);
     showLogin();
   }
 });
 render();
+
+/* ================= PORTA COM FOTO (como a da Central RM) =================
+   Neste telefone ficam só: o e-mail e o primeiro nome de quem marcou
+   "Lembrar meu e-mail" (minhas-contas-login) e a foto de cada conta
+   (minhas-contas-fotos). A foto também fica na conta, em users/<uid>/perfil
+   -- separada das contas, para não pesar a cada gravação --, e chega a um
+   telefone novo depois do primeiro login. A senha nunca é guardada. */
+const LOGIN_KEY='minhas-contas-login', FOTOS_KEY='minhas-contas-fotos';
+let lembrarAoEntrar, PERFIL={}, fotoPendente;
+function loginLembrado(){try{const v=JSON.parse(localStorage.getItem(LOGIN_KEY)||'null');return v&&v.email?v:null;}catch{return null;}}
+function fotosAparelho(){try{return JSON.parse(localStorage.getItem(FOTOS_KEY)||'{}');}catch{return {};}}
+function fotoGrava(email,foto){try{const m=fotosAparelho(),k=String(email||'').toLowerCase();if(!k)return;if(foto)m[k]=foto;else delete m[k];localStorage.setItem(FOTOS_KEY,JSON.stringify(m));}catch{}}
+function primeiroNome(nome,email){
+ const n=String(nome||'').trim().split(/\s+/)[0];
+ if(n)return n.charAt(0).toUpperCase()+n.slice(1);
+ const l=String(email||'').split('@')[0].split(/[._-]/)[0];
+ return l?l.charAt(0).toUpperCase()+l.slice(1):'';
+}
+/* "fulano.exemplo@email.com" -> "fula•••@email.com" */
+function emailMetade(email){
+ const [l,d]=String(email||'').split('@'); if(!d)return email||'';
+ const mostra=l.length>=6?4:Math.max(1,l.length-2);
+ return l.slice(0,mostra)+'•••@'+d;
+}
+function saudacao(){const h=new Date().getHours();return h>=5&&h<12?'Bom dia,':h>=12&&h<18?'Boa tarde,':'Boa noite,';}
+function pintaFoto(el,ini,email,nome,conta,foto){
+ if(!el)return;
+ foto=foto!==undefined?foto:(email?fotosAparelho()[String(email).toLowerCase()]:null);
+ el.classList.toggle('conta',!!(conta||foto)); el.classList.toggle('com-foto',!!foto);
+ el.style.backgroundImage=foto?`url("${foto}")`:'';
+ if(ini)ini.textContent=(nome||email||'?').trim().charAt(0).toUpperCase();
+}
+function prepararPorta(forcarForm){
+ const tela=els.loginScreen, lemb=forcarForm?null:loginLembrado(), guardado=loginLembrado();
+ tela.classList.toggle('lembrado',!!lemb);
+ els.loginPassword.value=''; els.loginPassword.type='password';
+ const olho=$('#loginEye'); if(olho){olho.setAttribute('aria-pressed','false');olho.setAttribute('aria-label','Mostrar senha');}
+ const volta=$('#loginBack');
+ if(volta){volta.classList.toggle('on',!lemb&&!!guardado);volta.textContent=guardado?`← Voltar para ${guardado.nome||emailMetade(guardado.email)}`:'';}
+ if(lemb){
+   els.loginEmail.value=lemb.email;
+   $('#loginGreeting').textContent=saudacao();
+   $('#loginName').textContent=lemb.nome||primeiroNome('',lemb.email);
+   $('#loginAccountEmail').textContent=emailMetade(lemb.email);
+   els.loginHelp.textContent='';
+   pintaFoto($('#loginPhoto'),$('#loginInitial'),lemb.email,lemb.nome,true);
+ }else{
+   if(forcarForm)els.loginEmail.value='';
+   const cx=$('#loginRemember'); if(cx)cx.checked=true;
+   els.loginHelp.textContent='Entre com seu e-mail e senha.';
+   pintaFoto($('#loginPhoto'),$('#loginInitial'),els.loginEmail.value.trim(),'',false);
+ }
+}
+function loginGuardar(user){
+ const atual=loginLembrado(), mesma=atual&&atual.email.toLowerCase()===String(user.email).toLowerCase();
+ const nome=primeiroNome(PERFIL.nome,user.email);
+ try{
+   if(lembrarAoEntrar===true)localStorage.setItem(LOGIN_KEY,JSON.stringify({email:user.email,nome:mesma&&atual.nome?atual.nome:nome}));
+   // desmarcada: não guarda esta conta, e só esquece a lembrada se for a mesma
+   else if(lembrarAoEntrar===false&&mesma)localStorage.removeItem(LOGIN_KEY);
+ }catch{}
+ lembrarAoEntrar=undefined;
+}
+function nomeLembrado(email,nome){
+ const atual=loginLembrado();
+ if(atual&&atual.email.toLowerCase()===String(email).toLowerCase()&&nome){try{localStorage.setItem(LOGIN_KEY,JSON.stringify({email:atual.email,nome:primeiroNome(nome,email)}));}catch{}}
+}
+async function carregaPerfil(user){
+ try{
+   const sn=await get(ref(db,`users/${user.uid}/perfil`));
+   if(!sn.exists()){PERFIL={};return;}
+   PERFIL=sn.val()||{};
+   fotoGrava(user.email,PERFIL.foto||null);
+   if(PERFIL.nome)nomeLembrado(user.email,PERFIL.nome);
+ }catch(err){console.warn('perfil',err);PERFIL={};}
+ pintaMais();
+}
+function pintaMais(){
+ const em=currentUser?.email||''; const foto=PERFIL.foto||fotosAparelho()[em.toLowerCase()]||null;
+ const el=$('#moreAvatar'); if(!el)return;
+ el.style.backgroundImage=foto?`url("${foto}")`:''; el.classList.toggle('com-foto',!!foto);
+ el.textContent=foto?'':primeiroNome(PERFIL.nome,em).charAt(0);
+}
+/* foto escolhida: recorte quadrado no centro, 320 px, JPEG -- uns 20 KB */
+function preparaFoto(file){
+ return new Promise((ok,falha)=>{
+   const url=URL.createObjectURL(file), img=new Image();
+   img.onload=()=>{const t=320,c=document.createElement('canvas');c.width=c.height=t;
+     const lado=Math.min(img.naturalWidth,img.naturalHeight),sx=(img.naturalWidth-lado)/2,sy=(img.naturalHeight-lado)/2;
+     const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,t,t);g.drawImage(img,sx,sy,lado,lado,0,0,t,t);
+     URL.revokeObjectURL(url);ok(c.toDataURL('image/jpeg',.82));};
+   img.onerror=()=>{URL.revokeObjectURL(url);falha(new Error('imagem'));};
+   img.src=url;
+ });
+}
+function abrePerfil(){
+ const em=currentUser?.email||''; fotoPendente=undefined;
+ $('#profileName').value=PERFIL.nome||'';
+ pintaFoto($('#profilePreview'),$('#profileInitial'),em,PERFIL.nome,true,PERFIL.foto||fotosAparelho()[em.toLowerCase()]||null);
+ $('#profileDialog').showModal();
+}
+$('#profilePhotoInput').addEventListener('change',async e=>{
+ const f=e.target.files?.[0]; e.target.value=''; if(!f)return;
+ try{fotoPendente=await preparaFoto(f);pintaFoto($('#profilePreview'),$('#profileInitial'),'',$('#profileName').value,true,fotoPendente);}
+ catch{alert('Não consegui abrir esta imagem. Tente outra foto.');}
+});
+$('#profileRemove').addEventListener('click',()=>{fotoPendente=null;pintaFoto($('#profilePreview'),$('#profileInitial'),'',$('#profileName').value||currentUser?.email,true,null);});
+$('#profileSave').addEventListener('click',async()=>{
+ if(!currentUser)return;
+ const nome=$('#profileName').value.trim().slice(0,40);
+ const foto=fotoPendente!==undefined?fotoPendente:(PERFIL.foto||null);
+ const novo={nome:nome||null,foto:foto||null};
+ try{await set(ref(db,`users/${currentUser.uid}/perfil`),novo);}
+ catch(err){alert('Não foi possível salvar na nuvem: '+msgDados(err));return;}
+ PERFIL=novo; fotoGrava(currentUser.email,novo.foto); if(nome)nomeLembrado(currentUser.email,nome);
+ pintaMais(); $('#profileDialog').close();
+});
+$('#loginEye').addEventListener('click',()=>{const b=$('#loginEye'),v=els.loginPassword.type==='password';els.loginPassword.type=v?'text':'password';b.setAttribute('aria-pressed',String(v));b.setAttribute('aria-label',v?'Esconder senha':'Mostrar senha');});
+$('#loginOther').addEventListener('click',()=>{prepararPorta(true);els.loginEmail.focus();});
+$('#loginSwap').addEventListener('click',()=>{prepararPorta(true);els.loginEmail.focus();});
+$('#loginBack').addEventListener('click',()=>{prepararPorta(false);els.loginPassword.focus();});
+els.loginEmail.addEventListener('input',()=>{if(!els.loginScreen.classList.contains('lembrado'))pintaFoto($('#loginPhoto'),$('#loginInitial'),els.loginEmail.value.trim(),'',false);});
+if(!currentUser){const msg=els.loginHelp.textContent;prepararPorta(false);if(!els.loginScreen.classList.contains('lembrado'))els.loginHelp.textContent=msg;}
 
 /* MULTIUSUARIO */
 const createAccountBtn=document.querySelector('#createAccountBtn'),forgotPasswordBtn=document.querySelector('#forgotPasswordBtn'),createAccountDialog=document.querySelector('#createAccountDialog'),createAccountForm=document.querySelector('#createAccountForm');

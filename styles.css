@@ -20,20 +20,72 @@ button{cursor:pointer}
 .hidden{display:none!important}
 b,strong{font-variant-numeric:tabular-nums}
 
-/* ---------- login ---------- */
-.login-screen{min-height:100dvh;background:linear-gradient(160deg,#4a22c9,#7c5cf0);padding:calc(28px + env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom));display:grid;place-items:center}
-.login-card{width:min(100%,420px);background:var(--card);border-radius:28px;padding:28px 22px;box-shadow:0 30px 70px rgba(23,13,70,.32);text-align:center}
-.lock-mark{width:64px;height:64px;border-radius:20px;background:var(--roxo-s);display:grid;place-items:center;font-size:28px;margin:0 auto 16px}
-.login-card h1{font-size:28px;margin:0;letter-spacing:-.02em}
-.login-help{color:var(--mudo);line-height:1.45;margin:8px auto 18px;max-width:300px}
-.login-card label{text-align:left;display:grid;gap:6px;font-size:13px;font-weight:700;margin:12px 0}
-.login-card input{width:100%;padding:15px;border:1px solid var(--linha);border-radius:14px;font-size:17px;background:var(--campo);outline:none}
+/* ---------- porta (login), no modelo da Central RM ---------- */
+.login-screen{min-height:100dvh;position:relative;overflow-x:hidden;display:flex;flex-direction:column;align-items:center;
+  padding:max(28px,env(safe-area-inset-top)) 18px max(24px,env(safe-area-inset-bottom));
+  background:radial-gradient(120% 70% at 50% 0%,#6a43ea 0%,#3d1ab0 55%,#1d0d5c 100%)}
+/* treliça de fundo, apagando nas bordas */
+.login-screen::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.16;
+  background:repeating-linear-gradient(60deg,#fff 0 1px,transparent 1px 46px),repeating-linear-gradient(-60deg,#fff 0 1px,transparent 1px 46px);
+  -webkit-mask:radial-gradient(520px 460px at 50% 38%,#000 0%,transparent 75%);mask:radial-gradient(520px 460px at 50% 38%,#000 0%,transparent 75%)}
+.login-card{position:relative;z-index:1;margin:auto 0;width:min(100%,400px);background:var(--card);border-radius:28px;
+  padding:30px 22px 20px;box-shadow:0 30px 70px rgba(10,4,40,.45);display:flex;flex-direction:column;align-items:center;text-align:center}
+.login-foot{position:relative;z-index:1;color:rgba(255,255,255,.72);font-size:12px;text-align:center;margin:18px 10px 0}
+.login-photo{width:112px;height:112px;border-radius:50%;flex:none;display:grid;place-items:center;margin:0 0 14px;
+  background:var(--roxo-s) center/cover no-repeat;color:var(--roxo)}
+.login-photo .lp-marca{font-size:34px;font-weight:900;letter-spacing:-.04em}
+.login-photo .lp-ini{display:none;font-size:46px;font-weight:850;color:#fff}
+/* conta reconhecida: anel roxo com folga na cor do cartão */
+.login-photo.conta{box-shadow:0 0 0 3px var(--card),0 0 0 6px var(--roxo),0 16px 34px rgba(40,10,120,.35)}
+.login-photo.conta .lp-marca{display:none}
+.login-photo.conta:not(.com-foto){background-color:#7a5ce8}
+.login-photo.conta:not(.com-foto) .lp-ini{display:block}
+.login-photo.com-foto .lp-ini,.login-photo.com-foto .lp-marca{display:none}
+.login-hello{display:none;flex-direction:column;align-items:center;width:100%;margin-bottom:14px}
+.login-greet{font-size:14px;font-weight:600;color:var(--mudo)}
+.login-name{font-size:30px;font-weight:850;letter-spacing:-.02em;line-height:1.12;margin-top:2px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.login-account{margin-top:12px;display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:5px 5px 5px 12px;border-radius:999px;background:var(--fundo);border:1px solid var(--linha)}
+#loginAccountEmail{font-size:14px;font-weight:600;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.login-swap{flex:none;border:0;border-radius:999px;background:var(--roxo-s);color:var(--roxo);font-size:13px;font-weight:800;padding:6px 11px}
+.login-brand h1{font-size:27px;margin:2px 0 0;letter-spacing:-.02em}
+.login-help{color:var(--mudo);line-height:1.45;margin:8px auto 14px;max-width:300px;font-size:14.5px}
+.login-help:empty{display:none}
+#loginForm{width:100%}
+.login-card label{text-align:left;display:grid;gap:6px;font-size:13px;font-weight:700;margin:10px 0}
+.login-card input[type=email],.login-card input[type=password],.login-card input[type=text]{width:100%;padding:15px;border:1px solid var(--linha);border-radius:14px;font-size:17px;background:var(--campo);outline:none}
 .login-card input:focus{border-color:var(--roxo);box-shadow:0 0 0 3px var(--roxo-s)}
-.login-secondary-actions{display:grid;gap:8px;margin-top:10px}
+.login-pass{position:relative;display:block}
+.login-pass input{padding-right:52px!important}
+.login-eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:44px;height:44px;border:0;background:none;color:var(--mudo);display:grid;place-items:center;border-radius:10px}
+.login-eye[aria-pressed="true"]{color:var(--roxo)}
+.login-card label.login-remember{display:flex;align-items:center;gap:10px;min-height:40px;font-size:14px;font-weight:600;margin:4px 0 6px;position:relative;cursor:pointer}
+.login-remember input{position:absolute;opacity:0;width:1px;height:1px}
+.lr-box{width:20px;height:20px;border-radius:6px;flex:none;display:grid;place-items:center;border:1.5px solid var(--linha);color:transparent}
+.login-remember input:checked+.lr-box{background:var(--roxo);border-color:var(--roxo);color:#fff}
+.login-remember input:focus-visible+.lr-box{box-shadow:0 0 0 3px var(--roxo-s)}
+.login-secondary-actions{display:grid;gap:6px;margin-top:10px}
+.login-other,.login-back{border:0;background:none;font-size:14px;font-weight:600;color:var(--mudo);min-height:44px;margin-top:6px}
+.login-other b{color:var(--roxo);font-weight:800}
+.login-back{display:none;font-size:13.5px}
+.login-back.on{display:block}
+/* quem manda é o modo */
+.login-screen.lembrado .login-hello{display:flex}
+.login-screen.lembrado .login-brand,.login-screen.lembrado .login-email-field,.login-screen.lembrado .login-remember,.login-screen.lembrado #createAccountBtn{display:none}
+.login-screen:not(.lembrado) .login-other{display:none}
+.login-screen:not(.lembrado) .login-photo{width:78px;height:78px;margin-bottom:10px}
 .security-note{font-size:12px;color:var(--mudo);margin:18px 4px 0;text-align:center}
 .full{width:100%;margin-top:6px;font-size:16px}
-.eyebrow{font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--roxo)}
+.eyebrow{font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--roxo);margin:0}
 .eyebrow.dark{color:var(--roxo)}
+/* perfil */
+.profile-pic{display:flex;align-items:center;gap:16px;margin:4px 0 6px}
+.profile-pic .login-photo{width:84px;height:84px;margin:0 6px}
+.profile-pic-acts{display:grid;gap:4px;justify-items:start}
+.pick{display:inline-block;cursor:pointer;padding:11px 16px}
+.menu button.menu-perfil{justify-content:flex-start;gap:12px}
+.menu-perfil .mp-t{flex:1;display:grid;text-align:left}
+.menu-perfil .mp-t b{font-size:15px}.menu-perfil .mp-t small{font-size:12px;color:var(--mudo);font-weight:600}
+.more-avatar{width:42px;height:42px;border-radius:50%;background:#7a5ce8 center/cover no-repeat;color:#fff!important;font-weight:850;font-size:18px!important;display:grid;place-items:center;flex:none}
 
 /* ---------- botões ---------- */
 .primary-btn,.ghost-btn,.import-btn{border:0;border-radius:14px;padding:14px 16px;font-weight:800;text-align:center}
