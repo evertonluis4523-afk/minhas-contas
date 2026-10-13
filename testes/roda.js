@@ -46,7 +46,7 @@ const DADOS = () => ({ accounts: [
     { id: 'c2', amount: 180, category: 'Combustível', place: 'Posto Modelo', date: '2026-10-07' }] });
 
 async function abre(b, opt = {}) {
-  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2,
+  const ctx = await b.newContext({ viewport: opt.tela || { width: 390, height: 844 }, colorScheme: opt.escuro ? 'dark' : 'light', isMobile: true, hasTouch: true, deviceScaleFactor: 2,
     timezoneId: 'America/Sao_Paulo', serviceWorkers: 'block' });
   const pg = await ctx.newPage(); const erros = [];
   pg.on('pageerror', e => erros.push(String(e.message).slice(0, 200)));
@@ -220,13 +220,17 @@ teste('vencimentos-e-paguei', async (b, t) => {
 teste('fotos', async (b, t) => {
   // só com FOTOS=<pasta>: fotos das telas com os dados fictícios, para conferir de olho
   if (!process.env.FOTOS) return;
-  const { ctx, pg } = await abre(b, { relogio: HOJE, dados: DADOS_B() });
-  await pg.screenshot({ path: path.join(process.env.FOTOS, 'contas.png'), fullPage: true });
-  await pg.click('.nav-btn[data-view="costs"]'); await pg.waitForTimeout(150);
-  await pg.screenshot({ path: path.join(process.env.FOTOS, 'custos.png'), fullPage: true });
-  await pg.click('.nav-btn[data-view="debts"]'); await pg.click('#dueList [data-pay-due]'); await pg.waitForTimeout(150);
-  await pg.screenshot({ path: path.join(process.env.FOTOS, 'pagamento.png') });
-  await ctx.close();
+  for (const escuro of [false, true]) {
+    const { ctx, pg } = await abre(b, { relogio: HOJE, dados: DADOS_B(), escuro });
+    const f = n => pg.screenshot({ path: path.join(process.env.FOTOS, (escuro ? 'escuro-' : '') + n + '.png') });
+    await f('1-inicio');
+    await pg.click('.nav-btn[data-view="debts"]'); await f('2-dividas');
+    await pg.click('[data-open-account="a2"] .sub-t'); await pg.waitForTimeout(250); await f('3-folha-conta');
+    await pg.click('#accountSheet [data-pay="a2"]'); await pg.waitForTimeout(250); await f('4-pagamento');
+    await pg.keyboard.press('Escape'); await pg.click('.nav-btn[data-view="costs"]'); await pg.waitForTimeout(100); await f('5-gastos');
+    await ctx.close();
+  }
+  const { ctx, pg } = await abre(b, { logado: false }); await pg.screenshot({ path: path.join(process.env.FOTOS, '0-login.png') }); await ctx.close();
 });
 
 teste('quitadas-editar-e-desfazer', async (b, t) => {
@@ -251,7 +255,11 @@ teste('quitadas-editar-e-desfazer', async (b, t) => {
   t.ok('excluir pagamento: some, mostra "Desfazer"', semP1 && /Desfazer/.test(toast), toast);
   t.ok('Desfazer devolve o pagamento', n.accounts.find(a => a.id === 'a1').payments.some(p => p.id === 'p1'), JSON.stringify(n.accounts[0].payments));
   // editar conta: vencimento e parcela
-  await pg.click('[data-edit-account="a3"]'); await pg.waitForTimeout(80);
+  // na tela nova: Dívidas › toca na conta › folha da conta › Editar
+  await pg.click('.nav-btn[data-view="debts"]'); await pg.click('[data-open-account="a3"] .sub-t'); await pg.waitForTimeout(120);
+  const folha = await pg.evaluate(() => ({ aberta: document.getElementById('accountSheet').open, txt: document.getElementById('accountSheetBody').textContent.replace(/\s+/g, ' ') }));
+  t.ok('tocar na conta abre a folha com falta, pago e o vencimento', folha.aberta && /Falta\s*R\$\s?7\.300,00/.test(folha.txt) && /vence em 7 dias/.test(folha.txt), folha.txt.slice(0, 300));
+  await pg.click('#accountSheet [data-edit-account="a3"]'); await pg.waitForTimeout(80);
   await pg.fill('#accountDueDay', '25'); await pg.fill('#accountInstallment', '500');
   await pg.evaluate(() => document.getElementById('accountForm').requestSubmit()); await pg.waitForTimeout(150);
   n = await nuvem(pg); const a3 = n.accounts.find(a => a.id === 'a3');
@@ -282,6 +290,61 @@ teste('gastos-comparacao-limite-e-categoria-propria', async (b, t) => {
   t.ok('categoria própria fica guardada e o gasto usa ela', (n.categories || []).includes('Pet') && n.costs.some(c => c.category === 'Pet'), JSON.stringify({ cats: n.categories }));
   t.ok('sem erro na página', !erros.length, erros.join(' | '));
   await ctx.close();
+});
+
+/* ---------- etapa C: tela nova ---------- */
+teste('tela-nova-abas-teclado-filtros', async (b, t) => {
+  const { ctx, pg, erros } = await abre(b, { relogio: HOJE, dados: DADOS_B() });
+  const abas = await pg.evaluate(() => [...document.querySelectorAll('.bottom-nav .nav-btn')].map(x => x.textContent.trim()).join(','));
+  t.ok('barra de baixo: Início, Dívidas, Gastos, Mais (com o + no meio)', abas === 'Início,Dívidas,Gastos,Mais', abas);
+  const inicio = await pg.evaluate(() => ({ vis: !document.getElementById('homeView').classList.contains('hidden'),
+    falta: document.getElementById('totalRemaining').textContent, venc: document.querySelectorAll('#dueList [data-due]').length }));
+  t.ok('abre no Início: falta pagar e próximos vencimentos', inicio.vis && /16\.700,00/.test(inicio.falta) && inicio.venc === 3, JSON.stringify(inicio));
+  // teclado de dinheiro
+  await pg.click('#fab'); await pg.waitForTimeout(100);
+  for (const k of ['1', '2', ',', '5', '0', '9', 'back']) await pg.click(`[data-keypad="paymentAmount"] [data-key="${k}"]`);
+  const v = await pg.inputValue('#paymentAmount');
+  t.ok('teclado: 1 2 , 5 0 (9 ignorado: só 2 casas) ⌫ → "12,5"', v === '12,5', v);
+  await pg.selectOption('#paymentAccount', 'a3'); await pg.waitForTimeout(50);
+  const sug = await pg.evaluate(() => [...document.querySelectorAll('#paySuggest [data-suggest]')].map(x => x.textContent.replace(/\s+/g, ' ')));
+  t.ok('sugestões: Parcela R$ 412,00 e Tudo R$ 7.300,00', /Parcela R\$\s?412,00/.test(sug[0] || '') && /Tudo R\$\s?7\.300,00/.test(sug[1] || ''), JSON.stringify(sug));
+  await pg.click('#paySuggest [data-suggest]'); 
+  const caixa = await pg.evaluate(() => { const r = document.querySelector('#paymentDialog .modal-card').getBoundingClientRect(); return { fundo: Math.round(r.bottom), h: innerHeight }; });
+  t.ok('o formulário sobe de baixo (folha presa no pé da tela)', Math.abs(caixa.fundo - caixa.h) <= 2, JSON.stringify(caixa));
+  await pg.evaluate(() => document.getElementById('paymentForm').requestSubmit()); await pg.waitForTimeout(150);
+  const n = await nuvem(pg);
+  t.ok('salvou R$ 412,00 no consignado', n.accounts.find(a => a.id === 'a3').payments.some(p => p.amount === 412), '');
+  // filtros das dívidas
+  await pg.click('.nav-btn[data-view="debts"]'); await pg.click('#debtFilters [data-filter="late"]'); await pg.waitForTimeout(80);
+  const late = await pg.evaluate(() => [...document.querySelectorAll('#accountsList [data-open-account]')].map(x => x.dataset.openAccount).join(','));
+  t.ok('filtro "Atrasadas": só o empréstimo atrasado', late === 'a2', late);
+  await pg.click('#debtFilters [data-filter="card"]'); await pg.waitForTimeout(50);
+  const card = await pg.evaluate(() => [...document.querySelectorAll('#accountsList [data-open-account]')].map(x => x.dataset.openAccount).join(','));
+  t.ok('filtro "Cartões": só o cartão', card === 'a1', card);
+  // Mais: backup e sair
+  await pg.click('.nav-btn[data-view="more"]'); await pg.waitForTimeout(50);
+  const mais = await pg.evaluate(() => document.getElementById('moreView').textContent.replace(/\s+/g, ' '));
+  t.ok('Mais: backup e sair ficam aqui', /Backup/.test(mais) && /Sair/.test(mais), mais);
+  t.ok('sem erro na página', !erros.length, erros.join(' | '));
+  await ctx.close();
+});
+
+teste('tela-nova-celular-pequeno-e-tema-escuro', async (b, t) => {
+  for (const escuro of [false, true]) {
+    const { ctx, pg, erros } = await abre(b, { relogio: HOJE, dados: DADOS_B(), tela: { width: 360, height: 740 }, escuro });
+    const rola = [];
+    for (const v of ['home', 'debts', 'costs', 'more']) {
+      await pg.click(`.nav-btn[data-view="${v}"]`); await pg.waitForTimeout(60);
+      if (await pg.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) rola.push(v);
+    }
+    const fundo = await pg.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    const lum = (fundo.match(/\d+/g) || []).slice(0, 3).reduce((s, x) => s + Number(x), 0) / 3;
+    const nome = escuro ? 'escuro' : 'claro';
+    t.ok(nome + ': nenhuma aba rola de lado em 360 px', !rola.length, rola.join(','));
+    t.ok(nome + ': fundo segue o tema do aparelho', escuro ? lum < 40 : lum > 230, fundo);
+    t.ok(nome + ': sem erro na página', !erros.length, erros.join(' | '));
+    await ctx.close();
+  }
 });
 
 /* ---------- execução ---------- */
