@@ -71,7 +71,7 @@ async function rotas(pg) {
     if (u.hostname === 'app.local') {
       const f = path.join(RAIZ, decodeURIComponent(u.pathname.slice(1)) || 'index.html');
       if (fs.existsSync(f) && fs.statSync(f).isFile()) {
-        const tipo = { '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json' }[path.extname(f)] || 'text/html';
+        const tipo = { '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml' }[path.extname(f)] || 'text/html';
         return r.fulfill({ status: 200, contentType: tipo, body: fs.readFileSync(f) });
       }
       return r.fulfill({ status: 404, body: '' });
@@ -99,6 +99,24 @@ teste('icones-e-modo-offline', async (b, t) => {
   // sempre a rede primeiro: a versão nova chega na próxima abertura
   const sw1 = sw.replace(/\s+/g, ' ');
   t.ok('service worker: rede primeiro, cópia só sem internet', /respondWith\( ?fetch\(/.test(sw1) && /\.catch\(\(\) ?=> ?caches\.match/.test(sw1), '');
+});
+
+teste('icone-carteira-em-todos-os-lugares', async (b, t) => {
+  // ícone escolhido: opção E (carteira com check), em todos os tamanhos
+  const png = f => { const d = fs.readFileSync(path.join(RAIZ, f)); return { w: d.readUInt32BE(16), h: d.readUInt32BE(20) }; };
+  const tam = { 'icon-192.png': 192, 'icon-512.png': 512, 'icon-maskable-512.png': 512, 'apple-touch-icon.png': 180, 'favicon.png': 64 };
+  const errados = Object.entries(tam).filter(([f, n]) => !fs.existsSync(path.join(RAIZ, f)) || png(f).w !== n || png(f).h !== n).map(([f]) => f);
+  t.ok('ícones nos tamanhos certos (192, 512, 512 com margem, 180 do iPhone, 64 da aba)', !errados.length, errados.join(','));
+  const man = JSON.parse(fs.readFileSync(path.join(RAIZ, 'manifest.webmanifest'), 'utf8'));
+  t.ok('manifest tem a versão com margem (maskable) para o Android não cortar', man.icons.some(i => i.purpose === 'maskable' && i.src.includes('maskable')), JSON.stringify(man.icons));
+  const html = fs.readFileSync(path.join(RAIZ, 'index.html'), 'utf8');
+  t.ok('iPhone usa o de 180 px e a aba do navegador tem ícone', /apple-touch-icon" href="\.\/apple-touch-icon\.png"/.test(html) && /rel="icon"/.test(html), '');
+  const svg = fs.readFileSync(path.join(RAIZ, 'icone.svg'), 'utf8');
+  t.ok('desenho da carteira com check (verde) no ícone', /#3fe0a0/.test(svg) && /rx="44"/.test(svg), '');
+  const { ctx, pg } = await abre(b, { logado: false });
+  const bg = await pg.evaluate(() => getComputedStyle(document.getElementById('loginPhoto')).backgroundImage);
+  t.ok('tela de entrada (sem conta lembrada) mostra o ícone do app', /icon-512\.png/.test(bg), bg);
+  await ctx.close();
 });
 
 teste('data-de-hoje-no-horario-de-brasilia', async (b, t) => {
