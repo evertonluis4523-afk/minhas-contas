@@ -58,6 +58,12 @@ async function abre(b, opt = {}) {
     window.__fb = { user: o.logado === false ? null : { uid: 'u1', email: 'exemplo@email.com' }, db: { users: { u1: { finance: o.dados } } },
       ouvintes: {}, escritas: [], negado: !!o.negado, loginErro: o.loginErro || null };
   }, { dados: opt.dados || DADOS(), logado: opt.logado, negado: opt.negado, loginErro: opt.loginErro });
+  await rotas(pg);
+  await pg.goto('http://app.local/index.html');
+  await pg.waitForTimeout(opt.espera || 700);
+  return { ctx, pg, erros };
+}
+async function rotas(pg) {
   await pg.route('**/*', r => {
     const u = new URL(r.request().url());
     const m = u.pathname.match(/(firebase-[a-z]+\.js)$/);
@@ -72,9 +78,6 @@ async function abre(b, opt = {}) {
     }
     return r.abort();
   });
-  await pg.goto('http://app.local/index.html');
-  await pg.waitForTimeout(opt.espera || 700);
-  return { ctx, pg, erros };
 }
 
 /* ---------- testes ---------- */
@@ -231,6 +234,17 @@ teste('fotos', async (b, t) => {
     await ctx.close();
   }
   const { ctx, pg } = await abre(b, { logado: false }); await pg.screenshot({ path: path.join(process.env.FOTOS, '0-login.png') }); await ctx.close();
+  // porta de quem já entrou neste telefone (foto fictícia de FOTO_AVATAR, se houver)
+  const foto = process.env.FOTO_AVATAR ? 'data:image/jpeg;base64,' + fs.readFileSync(process.env.FOTO_AVATAR).toString('base64') : null;
+  for (const [nome, escuro, comFoto] of [['0-porta', false, true], ['0-porta-escuro', true, true], ['0-porta-sem-foto', false, false]]) {
+    const c = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, colorScheme: escuro ? 'dark' : 'light', serviceWorkers: 'block' });
+    const pg2 = await c.newPage(); await pg2.clock.setFixedTime(new Date('2026-10-13T15:00:00-03:00'));
+    await pg2.addInitScript(o => { localStorage.setItem('minhas-contas-login', JSON.stringify({ email: 'fulano.exemplo@email.com', nome: 'Fulano' }));
+      if (o.foto) localStorage.setItem('minhas-contas-fotos', JSON.stringify({ 'fulano.exemplo@email.com': o.foto }));
+      window.__fb = { user: null, db: { users: {} }, ouvintes: {}, escritas: [] }; }, { foto: comFoto ? foto : null });
+    await rotas(pg2); await pg2.goto('http://app.local/index.html'); await pg2.waitForTimeout(600);
+    await pg2.screenshot({ path: path.join(process.env.FOTOS, nome + '.png') }); await c.close();
+  }
 });
 
 teste('quitadas-editar-e-desfazer', async (b, t) => {
@@ -345,6 +359,59 @@ teste('tela-nova-celular-pequeno-e-tema-escuro', async (b, t) => {
     t.ok(nome + ': sem erro na página', !erros.length, erros.join(' | '));
     await ctx.close();
   }
+});
+
+/* ---------- porta com foto (como a da Central RM) ---------- */
+// foto fictícia: um quadrado colorido gerado aqui, sem rosto de ninguém
+const FOTO_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAQ0lEQVR42u3OMQ0AAAgDIJfc6BrDIwVMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPg2A0gAAZ4ex6oAAAAASUVORK5CYII=', 'base64');
+teste('login-com-foto-e-conta-lembrada', async (b, t) => {
+  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, timezoneId: 'America/Sao_Paulo', serviceWorkers: 'block' });
+  const nova = async (opt) => { // abre outra aba no MESMO aparelho (mesma memória do navegador)
+    const pg = await ctx.newPage(); const erros = []; pg.on('pageerror', e => erros.push(e.message)); pg.on('dialog', d => d.accept().catch(() => {}));
+    await pg.clock.setFixedTime(new Date('2026-10-13T15:00:00-03:00'));
+    await pg.addInitScript(o => { window.__fb = { user: o.logado ? { uid: 'u1', email: 'fulano.exemplo@email.com' } : null,
+      db: { users: { u1: { finance: o.dados, perfil: o.perfil || null } } }, ouvintes: {}, escritas: [] }; }, { dados: DADOS(), logado: !!opt.logado, perfil: opt.perfil });
+    await rotas(pg); await pg.goto('http://app.local/index.html'); await pg.waitForTimeout(600); pg.__erros = erros; return pg;
+  };
+  // 1º acesso: formulário inteiro, "lembrar" marcado
+  let pg = await nova({});
+  const f1 = await pg.evaluate(() => ({ modo: document.getElementById('loginScreen').classList.contains('lembrado'),
+    lembrar: document.getElementById('loginRemember').checked, email: document.getElementById('loginEmail').offsetParent !== null }));
+  t.ok('primeiro acesso: formulário com e-mail e "Lembrar meu e-mail" marcado', !f1.modo && f1.lembrar && f1.email, JSON.stringify(f1));
+  await pg.fill('#loginEmail', 'fulano.exemplo@email.com'); await pg.fill('#loginPassword', 'segredo1'); await pg.click('#loginSubmit'); await pg.waitForTimeout(500);
+  const guardado = await pg.evaluate(() => JSON.parse(localStorage.getItem('minhas-contas-login') || 'null'));
+  t.ok('ao entrar, guarda só e-mail e nome neste aparelho (nunca a senha)', guardado && guardado.email === 'fulano.exemplo@email.com' && guardado.nome === 'Fulano' && !JSON.stringify(guardado).includes('segredo1'), JSON.stringify(guardado));
+  // Mais › Minha foto e nome
+  await pg.click('.nav-btn[data-view="more"]'); await pg.click('[data-goto-action="perfil"]'); await pg.waitForTimeout(100);
+  await pg.setInputFiles('#profilePhotoInput', { name: 'foto.png', mimeType: 'image/png', buffer: FOTO_PNG }); await pg.waitForTimeout(400);
+  await pg.fill('#profileName', 'Fulano Exemplo'); await pg.click('#profileSave'); await pg.waitForTimeout(300);
+  const perfil = await pg.evaluate(() => ({ nuvem: window.__fb.db.users.u1.perfil, aparelho: JSON.parse(localStorage.getItem('minhas-contas-fotos') || '{}') }));
+  const fotoOk = perfil.nuvem && /^data:image\/jpeg;base64,/.test(perfil.nuvem.foto || '') && perfil.nuvem.foto.length < 60000;
+  t.ok('foto: recortada em JPEG pequeno, guardada na conta (perfil) e no aparelho', fotoOk && perfil.aparelho['fulano.exemplo@email.com'] === perfil.nuvem.foto && perfil.nuvem.nome === 'Fulano Exemplo', JSON.stringify({ tam: (perfil.nuvem && perfil.nuvem.foto || '').length, nome: perfil.nuvem && perfil.nuvem.nome }));
+  t.ok('a foto não vai junto das contas (finance)', !JSON.stringify(await pg.evaluate(() => window.__fb.db.users.u1.finance)).includes('data:image'), '');
+  await pg.click('.nav-btn[data-view="more"]'); await pg.click('#logoutBtn'); await pg.waitForTimeout(300);
+  // volta: porta reconhece a conta
+  const p = await pg.evaluate(() => { const el = id => document.getElementById(id), vis = id => !!el(id) && el(id).offsetParent !== null;
+    return { modo: el('loginScreen').classList.contains('lembrado'), sauda: el('loginGreeting').textContent, nome: el('loginName').textContent,
+      email: el('loginAccountEmail').textContent, campoEmail: vis('loginEmail'), senha: vis('loginPassword'),
+      foto: getComputedStyle(el('loginPhoto')).backgroundImage.slice(0, 30), comFoto: el('loginPhoto').classList.contains('com-foto') }; });
+  t.ok('ao sair, a porta reconhece: "Boa tarde," + nome + e-mail pela metade', p.modo && p.sauda === 'Boa tarde,' && p.nome === 'Fulano' && p.email === 'fula•••@email.com', JSON.stringify(p));
+  t.ok('mostra a foto grande e pede só a senha', p.comFoto && /data:image\/jpeg/.test(p.foto) && !p.campoEmail && p.senha, JSON.stringify(p));
+  // "Não é você?"
+  await pg.click('#loginOther'); await pg.waitForTimeout(80);
+  const o = await pg.evaluate(() => ({ modo: document.getElementById('loginScreen').classList.contains('lembrado'), volta: document.getElementById('loginBack').textContent, email: document.getElementById('loginEmail').value }));
+  t.ok('"Entrar com outra conta": formulário limpo e "← Voltar para Fulano"', !o.modo && /Voltar para Fulano/.test(o.volta) && o.email === '', JSON.stringify(o));
+  await pg.click('#loginBack'); await pg.waitForTimeout(50);
+  t.ok('"Voltar" devolve a porta da conta lembrada', await pg.evaluate(() => document.getElementById('loginScreen').classList.contains('lembrado')), '');
+  t.ok('sem erro na página', !pg.__erros.length, pg.__erros.join(' | '));
+  await pg.close();
+  // outro aparelho (memória limpa): a foto vem da conta depois do login
+  const ctx2 = await b.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' }); const p2 = await ctx2.newPage();
+  await p2.addInitScript(o => { window.__fb = { user: { uid: 'u1', email: 'fulano.exemplo@email.com' }, db: { users: { u1: { finance: o.dados, perfil: { nome: 'Fulano Exemplo', foto: 'data:image/jpeg;base64,AAAA' } } } }, ouvintes: {}, escritas: [] }; }, { dados: DADOS() });
+  await rotas(p2); await p2.goto('http://app.local/index.html'); await p2.waitForTimeout(600);
+  const dev = await p2.evaluate(() => JSON.parse(localStorage.getItem('minhas-contas-fotos') || '{}'));
+  t.ok('em outro telefone, a foto da conta vem da nuvem e fica para a próxima porta', dev['fulano.exemplo@email.com'] === 'data:image/jpeg;base64,AAAA', JSON.stringify(dev).slice(0, 80));
+  await ctx2.close(); await ctx.close();
 });
 
 /* ---------- execução ---------- */

@@ -15,23 +15,37 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
+  <!-- PORTA (como a da Central RM). Duas caras:
+       .lembrado -> quem já entrou neste telefone: foto grande, "Boa tarde,",
+                    nome, e-mail pela metade e só a senha;
+       sem ela   -> formulário inteiro (primeiro acesso ou "Não é você?").
+       Fica guardado NESTE aparelho só o e-mail, o nome e a foto -- a senha nunca. -->
   <section id="loginScreen" class="login-screen">
     <div class="login-card">
-      <div class="lock-mark">🔒</div>
-      <p class="eyebrow dark">ACESSO PROTEGIDO</p>
-      <h1>Minhas Contas</h1>
+      <div id="loginPhoto" class="login-photo" aria-hidden="true"><span id="loginInitial" class="lp-ini"></span><span class="lp-marca">R$</span></div>
+      <div class="login-hello">
+        <div id="loginGreeting" class="login-greet">Olá,</div>
+        <div id="loginName" class="login-name"></div>
+        <div class="login-account"><span id="loginAccountEmail"></span><button type="button" id="loginSwap" class="login-swap">Trocar</button></div>
+      </div>
+      <div class="login-brand"><p class="eyebrow dark">CONTROLE FINANCEIRO</p><h1>Minhas Contas</h1></div>
       <p id="loginHelp" class="login-help">Entre com seu e-mail e senha.</p>
-      <form id="loginForm">
-        <label>E-mail
-          <input id="loginEmail" type="email" autocomplete="email" required placeholder="voce@email.com" />
+      <form id="loginForm" autocomplete="on">
+        <label class="login-email-field">E-mail
+          <input id="loginEmail" type="email" autocomplete="username" autocapitalize="off" spellcheck="false" required placeholder="voce@email.com" />
         </label>
         <label>Senha
-          <input id="loginPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="••••••" />
+          <span class="login-pass"><input id="loginPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="Digite sua senha" />
+          <button type="button" id="loginEye" class="login-eye" aria-label="Mostrar senha" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span>
         </label>
-        <button id="loginSubmit" class="primary-btn full" type="submit">Entrar</button><div class="login-secondary-actions"><button type="button" id="createAccountBtn" class="ghost-btn">Criar minha conta</button><button type="button" id="forgotPasswordBtn" class="text-btn">Esqueci minha senha</button></div>
+        <label class="login-remember"><input type="checkbox" id="loginRemember" checked /><span class="lr-box" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></span>Lembrar meu e-mail neste aparelho</label>
+        <button id="loginSubmit" class="primary-btn full" type="submit">Entrar</button>
+        <div class="login-secondary-actions"><button type="button" id="createAccountBtn" class="ghost-btn">Criar minha conta</button><button type="button" id="forgotPasswordBtn" class="text-btn">Esqueci minha senha</button></div>
       </form>
-      <p class="security-note">Contas, pagamentos e custos ficam sincronizados no Firebase.</p>
+      <button type="button" id="loginOther" class="login-other">Não é você? <b>Entrar com outra conta</b></button>
+      <button type="button" id="loginBack" class="login-back"></button>
     </div>
+    <p class="login-foot">Seus dados ficam na sua conta, sincronizados entre os seus aparelhos.</p>
   </section>
 
   <div id="app" class="app-shell hidden">
@@ -93,6 +107,7 @@
     <section id="moreView" class="view hidden">
       <header class="top"><div><small id="whoEmail">&nbsp;</small><h1>Mais</h1></div></header>
       <div class="card menu">
+        <button type="button" data-goto-action="perfil" class="menu-perfil"><span id="moreAvatar" class="more-avatar"></span><span class="mp-t"><b>Minha foto e nome</b><small>aparecem na tela de entrada</small></span><span>›</span></button>
         <button type="button" data-goto-action="account">Cadastrar nova conta<span>›</span></button>
         <button type="button" data-goto-action="pdf">Importar dívidas por PDF<span>›</span></button>
         <button type="button" id="backupBtn">Backup (exportar ou importar)<span>›</span></button>
@@ -109,6 +124,18 @@
       <button class="nav-btn" data-view="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><b>Mais</b></button>
     </nav>
   </div>
+
+  <dialog id="profileDialog" class="modal sheet">
+    <form id="profileForm" method="dialog" class="modal-card">
+      <div class="sheet-handle"></div><div class="modal-head"><div><span class="eyebrow dark">PERFIL</span><h3>Minha foto e nome</h3></div><button type="button" class="close-btn" data-close="profileDialog">×</button></div>
+      <div class="profile-pic"><div id="profilePreview" class="login-photo conta"><span id="profileInitial" class="lp-ini"></span></div>
+        <div class="profile-pic-acts"><label class="primary-btn pick">Escolher foto<input id="profilePhotoInput" type="file" accept="image/*" hidden /></label>
+        <button type="button" id="profileRemove" class="link-btn danger">Tirar a foto</button></div></div>
+      <label>Como quer ser chamado<input id="profileName" type="text" maxlength="40" placeholder="ex.: Maria" autocomplete="given-name" /></label>
+      <p class="field-note">A foto e o nome aparecem na tela de entrada deste telefone e ficam na sua conta.</p>
+      <div class="modal-actions"><button type="button" class="ghost-btn" data-close="profileDialog">Cancelar</button><button type="button" id="profileSave" class="primary-btn">Salvar</button></div>
+    </form>
+  </dialog>
 
   <dialog id="accountSheet" class="modal sheet"><div class="modal-card" id="accountSheetBody"></div></dialog>
 
