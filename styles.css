@@ -20,7 +20,7 @@
 .nav-btn{border:0;background:none;border-radius:15px;color:#8991a4;display:grid;place-items:center;align-content:center;gap:2px}.nav-btn span{font-size:20px}.nav-btn b{font-size:11px}.nav-btn.active{background:#f0ebff;color:var(--purple)}
 .fab{bottom:calc(94px + env(safe-area-inset-bottom));z-index:11}
 .cost-toolbar{display:flex;gap:12px;align-items:end;justify-content:space-between;margin-bottom:16px}.cost-toolbar label{display:grid;gap:6px;font-size:12px;font-weight:800;color:var(--muted);flex:1}.cost-toolbar input{padding:12px 13px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);max-width:220px}
-.category-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px}.category-card{background:#fff;border:1px solid var(--line);border-radius:17px;padding:14px;display:flex;gap:11px;align-items:center;box-shadow:0 5px 15px rgba(31,38,69,.04)}.category-icon,.small-icon{display:grid;place-items:center;background:#f3efff;border-radius:13px;width:40px;height:40px;font-size:20px;flex:0 0 auto}.category-card div{min-width:0}.category-card small,.category-card em{display:block;color:var(--muted);font-style:normal;font-size:11px}.category-card strong{display:block;font-size:16px;margin:3px 0}.wide{grid-column:1/-1}.cost-left{display:flex;align-items:center;gap:10px;min-width:0}.cost-value strong{color:var(--ink)}.month-name{font-size:16px!important;letter-spacing:0!important;text-transform:capitalize}
+.category-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px}.category-card{background:#fff;border:1px solid var(--line);border-radius:17px;padding:14px;display:flex;gap:11px;align-items:center;box-shadow:0 5px 15px rgba(31,38,69,.04)}.category-icon,.small-icon{display:grid;place-items:center;background:#f3efff;border-radius:13px;width:40px;height:40px;font-size:20px;flex:0 0 auto}.category-card div{min-width:0}.category-card small,.category-card em{display:block;color:var(--muted);font-style:normal;font-size:11px}.category-card strong{display:block;font-size:16px;margin:3px 0}.wide{grid-column:1/-1}.cost-left{display:flex;align-items:center;gap:10px;min-width:0}.cost-value strong{color:var(--ink)}.month-name{font-size:16px!important;letter-spacing:0!important}
 #costSummary{margin-bottom:-58px}
 @media(max-width:520px){.cost-toolbar{align-items:stretch}.cost-toolbar .primary-btn{white-space:nowrap}.category-grid{grid-template-columns:1fr 1fr}.category-card{padding:12px}.category-card strong{font-size:14px}}
 
@@ -66,3 +66,9 @@
  .import-detected{align-items:flex-start}
 }
 .login-secondary-actions{display:grid;gap:8px;margin-top:10px}.login-secondary-actions .ghost-btn{width:100%}.text-btn{border:0;background:transparent;color:var(--purple,#5b2bd9);font-weight:800;padding:8px}
+/* barra de baixo: Contas · + · Custos (o + saiu de cima dos cartões) */
+.bottom-nav{grid-template-columns:1fr 76px 1fr}
+.nav-btn svg{width:22px;height:22px}
+.nav-add{width:58px;height:58px;margin:-24px auto 0;border:0;border-radius:19px;background:linear-gradient(145deg,var(--purple),#4420bd);color:#fff;font-size:32px;line-height:1;box-shadow:0 12px 24px rgba(80,42,185,.38);cursor:pointer}
+.link-btn{border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;font-weight:700;padding:8px 6px;cursor:pointer}
+.link-btn.danger{color:var(--red)}

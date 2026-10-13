@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+import { getDatabase, ref, set, onValue, get, runTransaction } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 const firebaseConfig = {
   apiKey: "AIzaSyBDOR9f748UNoGP5c72Y-vdmDBcffM8tMI",
   authDomain: "rm-contas.firebaseapp.com",
@@ -30,7 +30,7 @@ const fmt=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const els={
- loginScreen:$('#loginScreen'),app:$('#app'),loginForm:$('#loginForm'),loginEmail:$('#loginEmail'),loginPassword:$('#loginPassword'),loginHelp:$('#loginHelp'),loginSubmit:$('#loginSubmit'),resetPasswordBtn:$('#resetPasswordBtn'),
+ loginScreen:$('#loginScreen'),app:$('#app'),loginForm:$('#loginForm'),loginEmail:$('#loginEmail'),loginPassword:$('#loginPassword'),loginHelp:$('#loginHelp'),loginSubmit:$('#loginSubmit'),
  pageTitle:$('#pageTitle'),pageSubtitle:$('#pageSubtitle'),debtSummary:$('#debtSummary'),costSummary:$('#costSummary'),
  totalRemaining:$('#totalRemaining'),totalOriginal:$('#totalOriginal'),totalPaid:$('#totalPaid'),paidPercent:$('#paidPercent'),
  accountCount:$('#accountCount'),accountsList:$('#accountsList'),paymentsList:$('#paymentsList'),
@@ -73,6 +73,30 @@ async function save(){
    catch(err){console.error('Falha ao sincronizar com Firebase',err);throw err;}
  }
 }
+/* GRAVAR SEM APAGAR O QUE OUTRO APARELHO LANÇOU.
+   Antes cada gravação mandava a cópia inteira deste aparelho: se a mesma
+   pessoa lançasse algo no outro telefone no meio tempo, sumia. Agora cada
+   mudança é uma função aplicada aqui E sobre o que está na nuvem naquele
+   momento (transação do Firebase), então as duas ficam. */
+function normaliza(x){
+ x=x||blankState();
+ x.accounts=Array.isArray(x.accounts)?x.accounts.filter(Boolean):Object.values(x.accounts||{});
+ x.accounts.forEach(a=>{a.payments=Array.isArray(a.payments)?a.payments.filter(Boolean):Object.values(a.payments||{});});
+ x.costs=Array.isArray(x.costs)?x.costs.filter(Boolean):Object.values(x.costs||{});
+ return x;
+}
+async function mutate(fn){
+ fn(state); saveLocal(); render();
+ if(!(currentUser&&cloudReady))return;
+ try{
+   await runTransaction(ref(db,`users/${currentUser.uid}/finance`),cur=>{
+     const s=normaliza(cur), local=state;
+     state=s; try{fn(s);}finally{state=local;}
+     return s;
+   });
+ }catch(err){console.error('Falha ao sincronizar com Firebase',err);alert('Não foi possível salvar na nuvem: '+(msgDados(err)));}
+}
+const novoId=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 async function startCloudSync(user){
  currentUser=user;
  cloudReady=false;
@@ -141,10 +165,29 @@ function accountIcon(name){
  return`<div class="avatar">${esc(initials(name))}</div>`;
 }
 function categoryIcon(c){return({'Alimentação':'🍽️','Mercado':'🛒','Combustível':'⛽','Moradia':'🏠','Contas fixas':'🧾','Saúde':'💊','Lazer':'🎬','Transporte':'🚗','Compras':'🛍️','Outros':'•••'})[c]||'•••';}
-function today(){return new Date().toISOString().slice(0,10);}
+/* data de HOJE no relógio do telefone (Brasília). toISOString() dá a data
+   de Londres: depois das 21h o lançamento saía com a data de amanhã. */
+function today(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function pct(v){return `${(Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%`;}
 function currentMonth(){return today().slice(0,7);}
 function monthLabel(v){if(!v)return'—';const[y,m]=v.split('-');return new Date(Number(y),Number(m)-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).replace(/^./,x=>x.toUpperCase());}
 
+const MSG_LOGIN={
+ 'auth/invalid-credential':'E-mail ou senha incorretos.','auth/wrong-password':'E-mail ou senha incorretos.',
+ 'auth/user-not-found':'E-mail ou senha incorretos.','auth/invalid-email':'E-mail inválido.',
+ 'auth/too-many-requests':'Muitas tentativas. Espere alguns minutos e tente de novo.',
+ 'auth/network-request-failed':'Sem internet. Confira a conexão e tente de novo.',
+ 'auth/unauthorized-domain':'Domínio do GitHub Pages ainda não autorizado no Firebase.'
+};
+function msgLogin(err){return MSG_LOGIN[err?.code]||'Não foi possível entrar. Tente de novo.';}
+/* entrou, mas o banco não deixou ler os dados: não é senha errada, são as
+   regras do Firebase (foi o que aconteceu quando as regras foram trocadas) */
+function msgDados(err){
+ const t=String(err?.code||'')+' '+String(err?.message||'');
+ if(/permission/i.test(t))return 'O Firebase recusou o acesso aos seus dados (regras do banco). Sua senha está certa: avise quem administra o app.';
+ if(/network|offline/i.test(t))return 'Sem internet para carregar seus dados. Confira a conexão e abra de novo.';
+ return 'Falha ao carregar seus dados do Firebase.';
+}
 function showLogin(message='Entre com seu e-mail e senha.'){
  els.loginHelp.textContent=message;
  els.app.classList.add('hidden');
@@ -164,27 +207,10 @@ els.loginForm.addEventListener('submit',async e=>{
    els.loginSubmit.disabled=true; els.loginSubmit.textContent='Entrando...';
    await signInWithEmailAndPassword(auth,email,pass);
  }catch(err){
-   showLogin(err?.code==='auth/unauthorized-domain'?'Domínio do GitHub Pages ainda não autorizado no Firebase.':'E-mail ou senha incorretos, ou acesso ainda não criado.');
+   showLogin(msgLogin(err));
  }finally{
    els.loginSubmit.disabled=false; els.loginSubmit.textContent='Entrar';
  }
-});
-$('#registerBtn').addEventListener('click',async()=>{
- const email=els.loginEmail.value.trim();
- const pass=els.loginPassword.value;
- if(!email || pass.length<6) return alert('Informe o e-mail e uma senha com pelo menos 6 caracteres.');
- try{
-   await createUserWithEmailAndPassword(auth,email,pass);
-   alert('Acesso criado. Seus dados serão vinculados a este usuário.');
- }catch(err){
-   alert(err.code==='auth/email-already-in-use'?'Este e-mail já possui acesso.':'Não foi possível criar o acesso.');
- }
-});
-els.resetPasswordBtn.addEventListener('click',async()=>{
- const email=els.loginEmail.value.trim();
- if(!email) return alert('Digite seu e-mail primeiro.');
- try{await sendPasswordResetEmail(auth,email);alert('E-mail de redefinição enviado.');}
- catch{alert('Não foi possível enviar a redefinição para este e-mail.');}
 });
 $('#logoutBtn').addEventListener('click',()=>signOut(auth));
 
@@ -480,7 +506,7 @@ function upsertImportedItem(item){
    return 'updated';
  }
  const a={
-   id:crypto.randomUUID?.()||String(Date.now()),
+   id:item.novoId||novoId(),
    name:item.bank,detail:item.detail,type:item.type,
    original:item.amount,payments:[],source:item.source,sourceKey:item.sourceKey,
    importedAt:Date.now(),importMeta:item.meta||{}
@@ -501,15 +527,18 @@ async function savePdfImport(){
  });
  if(!selected.length)return alert('Selecione pelo menos uma dívida para importar.');
 
- if(pendingPdfImport.kind==='nubank-ddc')removeSupersededNubankScr();
-
- let created=0,updated=0;
- selected.forEach(item=>{
-   const action=upsertImportedItem(item);
-   if(action==='created')created++; else updated++;
+ const kind=pendingPdfImport.kind;
+ let created=0,updated=0,primeira=true;
+ // ids decididos uma vez só, para a conta criada aqui e na nuvem ser a mesma
+ selected.forEach(item=>{item.novoId=item.novoId||novoId();});
+ await mutate(()=>{
+   if(kind==='nubank-ddc')removeSupersededNubankScr();
+   selected.forEach(item=>{
+     const action=upsertImportedItem(item);
+     if(primeira){if(action==='created')created++; else updated++;}
+   });
+   primeira=false;
  });
-
- await save();
  els.pdfImportDialog.close();
  resetPdfImport();
  alert(`Importação concluída: ${created} criada(s) e ${updated} atualizada(s).`);
@@ -519,7 +548,7 @@ function render(){
  els.totalRemaining.textContent=fmt.format(t.remaining);
  els.totalOriginal.textContent=`Original: ${fmt.format(t.original)}`;
  els.totalPaid.textContent=fmt.format(t.totalPaid);
- els.paidPercent.textContent=t.original?`${Math.min(100,t.totalPaid/t.original*100).toFixed(1)}%`:'0%';
+ els.paidPercent.textContent=pct(t.original?Math.min(100,t.totalPaid/t.original*100):0);
 
  const groups=[...new Set(state.accounts.map(a=>a.name))].map(name=>({
    name,
@@ -533,7 +562,7 @@ function render(){
    const original=g.accounts.reduce((s,a)=>s+Number(a.original),0);
    const totalPaid=g.accounts.reduce((s,a)=>s+paid(a),0);
    const totalRemaining=Math.max(0,original-totalPaid);
-   const pct=original?Math.min(100,totalPaid/original*100):0;
+   const pctGrupo=original?Math.min(100,totalPaid/original*100):0;
 
    const accountRows=g.accounts.map((a,i)=>{
      const p=paid(a),r=remaining(a),apct=a.original?Math.min(100,p/a.original*100):0;
@@ -553,7 +582,7 @@ function render(){
        <div class="progress mini-progress"><span style="width:${apct}%"></span></div>
        <div class="sub-account-actions">
          <button class="mini-btn" data-pay="${a.id}">+ Pagamento</button>
-         <button class="mini-btn danger" data-delete-account="${a.id}">Excluir conta</button>
+         <button class="link-btn danger" data-delete-account="${a.id}">Excluir conta</button>
        </div>
      </div>`;
    }).join('');
@@ -563,10 +592,10 @@ function render(){
        <div class="account-name">${accountIcon(g.name)}<div><h3>${esc(g.name)}</h3><small>${g.accounts.length} ${g.accounts.length===1?'conta':'contas'}</small></div></div>
        <div class="account-balance"><small>Total restante</small><strong>${fmt.format(totalRemaining)}</strong></div>
      </div>
-     <div class="progress"><span style="width:${pct}%"></span></div>
+     <div class="progress"><span style="width:${pctGrupo}%"></span></div>
      <div class="creditor-summary">
        <span>Original: ${fmt.format(original)}</span>
-       <span>Pago: ${fmt.format(totalPaid)} • ${pct.toFixed(1)}%</span>
+       <span>Pago: ${fmt.format(totalPaid)} • ${pct(pctGrupo)}</span>
      </div>
      <div class="sub-accounts">${accountRows}</div>
      <div class="creditor-actions">
@@ -617,20 +646,19 @@ document.addEventListener('click',e=>{
  const close=e.target.closest('[data-close]');if(close)document.getElementById(close.dataset.close)?.close();
  const payBtn=e.target.closest('[data-pay]');if(payBtn)openPayment(payBtn.dataset.pay);
  const addUnder=e.target.closest('[data-add-under]');if(addUnder)openAccount(addUnder.dataset.addUnder);
- const delAcc=e.target.closest('[data-delete-account]');if(delAcc){const a=state.accounts.find(x=>x.id===delAcc.dataset.deleteAccount);if(a&&confirm(`Excluir ${a.name} e todo o histórico dela?`)){state.accounts=state.accounts.filter(x=>x.id!==a.id);save();}}
- const delPay=e.target.closest('[data-delete-payment]');if(delPay){const[aid,pid]=delPay.dataset.deletePayment.split('|');const a=state.accounts.find(x=>x.id===aid);if(a&&confirm('Excluir este pagamento?')){a.payments=a.payments.filter(p=>p.id!==pid);save();}}
- const delCost=e.target.closest('[data-delete-cost]');if(delCost&&confirm('Excluir este gasto?')){state.costs=state.costs.filter(c=>c.id!==delCost.dataset.deleteCost);save();}
+ const delAcc=e.target.closest('[data-delete-account]');if(delAcc){const a=state.accounts.find(x=>x.id===delAcc.dataset.deleteAccount);if(a&&confirm(`Excluir ${accountDisplay(a)} e todo o histórico dela?`)){const id=a.id;mutate(s=>{s.accounts=s.accounts.filter(x=>x.id!==id);});}}
+ const delPay=e.target.closest('[data-delete-payment]');if(delPay){const[aid,pid]=delPay.dataset.deletePayment.split('|');const a=state.accounts.find(x=>x.id===aid);if(a&&confirm('Excluir este pagamento?')){mutate(s=>{const x=s.accounts.find(y=>y.id===aid);if(x)x.payments=x.payments.filter(p=>p.id!==pid);});}}
+ const delCost=e.target.closest('[data-delete-cost]');if(delCost&&confirm('Excluir este gasto?')){const cid=delCost.dataset.deleteCost;mutate(s=>{s.costs=s.costs.filter(c=>c.id!==cid);});}
 });
 els.paymentForm.addEventListener('submit',e=>{
  e.preventDefault();const a=state.accounts.find(x=>x.id===els.paymentAccount.value),amount=Number(els.paymentAmount.value);if(!a||amount<=0)return;
  const r=remaining(a);if(amount>r+.001&&!confirm(`O pagamento é maior que o saldo restante (${fmt.format(r)}). Registrar mesmo assim?`))return;
- a.payments.push({id:crypto.randomUUID?.()||String(Date.now()),amount,date:els.paymentDate.value,note:els.paymentNote.value.trim(),createdAt:Date.now()});save();els.paymentDialog.close();
+ const p={id:novoId(),amount,date:els.paymentDate.value,note:els.paymentNote.value.trim(),createdAt:Date.now()},aid=a.id;els.paymentDialog.close();mutate(s=>{const x=s.accounts.find(y=>y.id===aid);if(x&&!x.payments.some(y=>y.id===p.id))x.payments.push({...p});});
 });
 els.accountCreditor?.addEventListener('change',()=>{const creditor=els.accountCreditor.value;els.accountName.disabled=!!creditor;$('#accountNameLabel').classList.toggle('hidden',!!creditor);if(creditor)els.accountName.value=creditor;else els.accountName.value='';});
 els.accountType?.addEventListener('change',toggleAccountTypeFields);
-els.accountForm.addEventListener('submit',e=>{e.preventDefault();const creditor=els.accountCreditor.value,name=(creditor||els.accountName.value).trim(),detail=els.accountDetail.value.trim(),type=els.accountType?.value||'other',original=Number(els.accountAmount.value);if(!name||original<=0)return;const a={id:crypto.randomUUID?.()||String(Date.now()),name,detail,type,original,payments:[]};if(type==='credit_card'){a.cardLimit=Number(els.cardLimit.value)||0;a.cardDueDay=Number(els.cardDueDay.value)||null;a.cardCloseDay=Number(els.cardCloseDay.value)||null;}state.accounts.push(a);save();els.accountDialog.close();});
-els.costForm.addEventListener('submit',e=>{e.preventDefault();const amount=Number(els.costAmount.value),place=els.costPlace.value.trim();if(amount<=0||!place)return;state.costs.push({id:crypto.randomUUID?.()||String(Date.now()),amount,category:els.costCategory.value,place,date:els.costDate.value,note:els.costNote.value.trim(),createdAt:Date.now()});els.monthFilter.value=els.costDate.value.slice(0,7);save();els.costDialog.close();});
-$('#clearPaymentsBtn').addEventListener('click',()=>{if(confirm('Limpar todos os pagamentos lançados?')){state.accounts.forEach(a=>a.payments=[]);save();}});
+els.accountForm.addEventListener('submit',e=>{e.preventDefault();const creditor=els.accountCreditor.value,name=(creditor||els.accountName.value).trim(),detail=els.accountDetail.value.trim(),type=els.accountType?.value||'other',original=Number(els.accountAmount.value);if(!name||original<=0)return;const a={id:novoId(),name,detail,type,original,payments:[]};if(type==='credit_card'){a.cardLimit=Number(els.cardLimit.value)||0;a.cardDueDay=Number(els.cardDueDay.value)||null;a.cardCloseDay=Number(els.cardCloseDay.value)||null;}els.accountDialog.close();mutate(s=>{if(!s.accounts.some(y=>y.id===a.id))s.accounts.push(JSON.parse(JSON.stringify(a)));});});
+els.costForm.addEventListener('submit',e=>{e.preventDefault();const amount=Number(els.costAmount.value),place=els.costPlace.value.trim();if(amount<=0||!place)return;const c={id:novoId(),amount,category:els.costCategory.value,place,date:els.costDate.value,note:els.costNote.value.trim(),createdAt:Date.now()};els.monthFilter.value=els.costDate.value.slice(0,7);els.costDialog.close();mutate(s=>{if(!s.costs.some(y=>y.id===c.id))s.costs.push({...c});});});
 $('#exportBtn').addEventListener('click',()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`minhas-contas-backup-${today()}.json`;a.click();URL.revokeObjectURL(url);});
 $('#importInput').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{const data=JSON.parse(await file.text());if(!Array.isArray(data.accounts))throw new Error();data.costs||=[];state=data;save();els.backupDialog.close();alert('Backup importado com sucesso.');}catch{alert('Arquivo de backup inválido.');}e.target.value='';});
 
@@ -644,7 +672,7 @@ onAuthStateChanged(auth,async user=>{
       unlock();
     }catch(err){
       console.error(err);
-      showLogin('Falha ao carregar seus dados do Firebase.');
+      showLogin(msgDados(err));
     }
   }else{
     currentUser=null; cloudReady=false;
